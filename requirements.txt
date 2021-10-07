@@ -1,0 +1,4 @@
+pymongo
+tqdm
+pandas
+jamo

@@ -1,0 +1,4 @@
+{
+  "API_KEY": "[API KEY HERE]",
+  "MONGO_URI": "mongodb://localhost/korea_apartment_price"
+}
