@@ -1,6 +1,8 @@
 from typing import Any, Dict, List, Optional, Set, Union
 import jamo
 
+# The trie implementation came from
+# https://m.blog.naver.com/cjsencks/221740232900
 class Node(object):
     def __init__(self, key:str, full_path:Optional[List[str]]=None, data:Any=None):
         self.key:str = key

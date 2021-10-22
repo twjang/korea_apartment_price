@@ -3,6 +3,8 @@ data/trades/*.json
 data/config.json
 *.pkl
 .vscode
+data/**/*.7z
+data/**/*.zip
 
 # Byte-compiled / optimized / DLL files
 *.py[cod]

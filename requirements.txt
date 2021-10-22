@@ -2,3 +2,5 @@ pymongo
 tqdm
 pandas
 jamo
+pyproj
+py7zr

@@ -1,5 +1,5 @@
-# 한국 아파트 실거래 데이터 도구
-아파트 실거래 데이터를 손쉽게 받아서 분석할 수 있도록 하기 위한 코드입니다.
+# 한국 아파트 가격 분석 도구
+아파트 가격 데이터를 손쉽게 받아서 분석할 수 있도록 하기 위한 코드입니다.
 
 ## 설치
 ### dependency
@@ -27,6 +27,9 @@ mongodb가 액세스 가능해야 합니다.
 * ./scripts/region_code.csv 에는 ./scripts/download_trades.py 를 통해 다운받을 지역의 법정동코드의 앞 5자리들의 목록이 있습니다. 기본적으로는 서울시, 경기도, 인천시의 코드들이 들어있습니다.
   * 법정동코드 앞 5자리는 국토교통부 실거래 API의 argument로 들어갑니다. 전체 법정동코드는 https://www.code.go.kr/stdcode/regCodeL.do 에서 확인하세요.  
 * ./download_trades.py가 실행되면, API를 통해서 받은 내용들이 json 형태로 serialize되어 ./data/trades 폴더에 저장함니다. 동시에 mongodb에도 저장합니다.
+
+### 건물 주소 및 좌표 다운로드
+* ./scripts/download_geocode.py를 실행시켜서 다운로드 받으세요.
 
 ## 사용 예시
 kospi_and_housing.ipynb 를 참조해주세요. 이 노트북은 서울 특정 단지 아파트 가격과 코스피 지수의 2015년 1월 1일 기준 수익률을 비교해줍니다.

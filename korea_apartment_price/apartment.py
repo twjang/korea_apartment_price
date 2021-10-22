@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, TypedDict, Union
 
 import pickle
 from tqdm import tqdm
@@ -29,26 +29,40 @@ def format_code(x):
     return '{:05d}'.format(x)
   return x
 
+class ApartmentAddress(TypedDict):
+  lawaddrcode: str      # 법정동코드 (시군구 + 읍면동)
+  name: str             # 이름
+  addrcode_city: str    # 도로명시군구코드  
+  addrcode_serial : str # 도로명일련번호코드
+  addrcode_bld: int     # 도로명건물본번호코드
+  addrcode_bld_sub: int # 도로명건물본번호코드
+
 def reload_apartment_names():
   global _apart_finder
 
   col = get_trades_collection()
   _apart_finder = Finder()
 
-  entries = set()
+  entries = {}
   total_cnt = col.count_documents(filter={})
   for ent in tqdm(col.find(), total=total_cnt):
-    addrcode = format_code(ent['lawaddrcode_city']) + format_code(ent['lawaddrcode_dong'])
+    lawaddrcode = format_code(ent['lawaddrcode_city']) + format_code(ent['lawaddrcode_dong'])
     name = ent['name']
     kwd = name.replace(' ', '').split('(', 1)[0]
-    entries.add((addrcode, kwd, name))
-  
-  for addrcode, kwd, name in tqdm(entries):
-    ent = {
-      'addrcode': addrcode,
+    entries[(lawaddrcode, kwd, name)] = {
+      'lawaddrcode': lawaddrcode,
       'name': name,
+      'addrcode_city': ent['addrcode_city'],
+      'addrcode_serial': ent['addrcode_serial'],
+      'addrcode_bld': ent['addrcode_bld'],
+      'addrcode_bld_sub': ent['addrcode_bld_sub'],
     }
-    _apart_finder.register([addrcode] + _make_ngrams(kwd, 2), ent)
+  
+  for key in tqdm(entries.keys()):
+    lawaddrcode, kwd, name = key
+    ent = entries[key]
+    _apart_finder.register([lawaddrcode] + _make_ngrams(kwd, 2), ent)
+
 
 def get_apart_finder():
   global _apart_finder
@@ -70,7 +84,7 @@ def _is_int(x)->bool:
   return False
 
 
-def search(query: Union[str, List[str]])->List[Dict[str, str]]:
+def search(query: Union[str, List[str]])->List[ApartmentAddress]:
   s = get_apart_finder()
   if isinstance(query, str):
     query = query.split()

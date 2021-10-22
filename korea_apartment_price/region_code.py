@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, TypedDict, Union
 
 import pandas as pd
 import pickle
@@ -16,6 +16,10 @@ path_finder_pkl = os.path.join(CACHE_ROOT, 'region_code_finder.pkl')
 
 _region_code_finder: Optional[Finder] = None
 
+class RegionCode(TypedDict):
+  lawaddrcode: str # 법정동코드 (시군구 + 읍면동)
+  address: str     # 주소 
+
 def reload_region_codes():
   global _region_code_finder
   _region_code_finder = Finder()
@@ -26,10 +30,10 @@ def reload_region_codes():
   for idx in range(len(data)):
     row = data.iloc[idx]
     dong = row['법정동명']
-    code = row['법정동코드']
+    code = str(row['법정동코드'])
 
-    ent = {
-      'code': code,
+    ent: RegionCode = {
+      'lawaddrcode': code,
       'address': dong,
     }
 
@@ -55,6 +59,6 @@ def get_region_code_finder():
         pickle.dump(_region_code_finder, f)
   return _region_code_finder
 
-def search(query: Union[str, List[str]])->List[Dict[str, str]]:
+def search(query: Union[str, List[str]])->List[RegionCode]:
   s = get_region_code_finder()
   return s.search(query)

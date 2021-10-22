@@ -3,4 +3,6 @@ import korea_apartment_price.path
 import korea_apartment_price.config
 import korea_apartment_price.region_code
 import korea_apartment_price.apartment
+import korea_apartment_price.geocode
+import korea_apartment_price.kb_liiv
 import korea_apartment_price.shortcuts
