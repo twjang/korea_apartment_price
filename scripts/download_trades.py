@@ -13,6 +13,7 @@ import json
 import korea_apartment_price
 from typing import Callable, List, Dict, Any, Optional, Tuple, TypeVar
 
+import re
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
@@ -26,8 +27,9 @@ from korea_apartment_price.utils import safe_int, safe_float
 region_codes = pd.read_csv(os.path.join(SCRIPT_ROOT, 'region_code.csv'))
 
 class TradeDownloader:
-  def __init__(self):
+  def __init__(self, timeout:float=5.0):
     self.api_key = get_cfg()['API_KEY']
+    self.timeout = timeout
 
   def get(self, ymd: int, region_code: int)->List[RowTrade]:
     num_rows = 1000
@@ -71,7 +73,7 @@ class TradeDownloader:
       }
 
       url = f'http://openapi.molit.go.kr/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTradeDev'
-      resp = requests.get(url, params=params)
+      resp = requests.get(url, params=params, timeout=self.timeout)
       soup = BeautifulSoup(resp.content, 'lxml-xml')
       items = soup.findAll('item')
       total_cnt = int(soup.findAll('totalCount')[0].text)
@@ -108,7 +110,6 @@ class TradeDownloader:
         ]:
           if intkey in item: item[intkey] = safe_int(item[intkey])
 
-
         for key, key_en in keylist:
           if isinstance(item[key], str):
             item[key] = item[key].strip()
@@ -118,38 +119,108 @@ class TradeDownloader:
       cur_page += 1
     return res
 
+
+def list_trade_entries_in_db()->List[Tuple[int, int, int]]:
+  col = korea_apartment_price.db.get_trades_collection()
+  entries = col.aggregate([{
+    "$group": {
+      "_id": {
+        "lawaddrcode_city": "$lawaddrcode_city",
+        "year": "$year",
+        "month": "$month",
+      }
+    }
+  }])
+  res = []
+  for entry in entries:
+    year = safe_int(entry['_id']['year'])
+    month = safe_int(entry['_id']['month'])
+    lawaddrcode_city = safe_int(entry['_id']['lawaddrcode_city'])
+    ymregion = (year, month, lawaddrcode_city)
+    res.append(ymregion)
+  return res
+
+
+
+def list_trade_entries_in_files()->List[Tuple[int, int, int]]:
+  res = []
+  regex = re.compile(r'^([0-9]{4})([0-9]{2})-([0-9]{5}).json$')
+
+  for fname in os.listdir(TRADE_DATA_ROOT):
+    gp = regex.match(fname)
+    if gp is None: continue
+    year = safe_int(gp.group(1))
+    month = safe_int(gp.group(2))
+    lawaddrcode_city = safe_int(gp.group(3))
+    res.append((year, month, lawaddrcode_city))
+  return res
+
+
+def remove_trade_entries_from_db(ymregions: List[Tuple[int, int, int]]):
+  col = korea_apartment_price.db.get_trades_collection()
+
+  for year, month, lawaddrcode_city in ymregions:
+    col.delete_many({
+      '$and': [
+        {'$expr': { '$eq': [ "$year", year ] }},
+        {'$expr': { '$eq': [ "$month", month ] }},
+        {'$expr': { '$eq': [ "$lawaddrcode_city", lawaddrcode_city ] }},
+      ]
+    })
+
+
+
+def fetch_and_insert(arg: Tuple[int, int, int]):
+  year, month, region_code = arg
+  ymd_code = year * 10 + month
+
+  fname = f'{year:04d}{month:02d}-{region_code}.json'
+  fpath = os.path.join(TRADE_DATA_ROOT, fname)
+
+  if os.path.exists(fpath):
+    return
+
+  os.makedirs(TRADE_DATA_ROOT, exist_ok=True)
+  dn = TradeDownloader()
+  data = None
+
+  while data is None:
+    try:
+      data = dn.get(ymd_code, region_code)
+    except requests.exceptions.Timeout:
+      pass
+
+  if len(data) > 0:
+    with open(fpath, 'w') as f:
+      content = json.dumps(data, ensure_ascii=False)
+      f.write(content)
+    col = korea_apartment_price.db.get_trades_collection()
+    col.insert_many(data)
+
+  time.sleep(0.1)
+
+
+
 if __name__ == '__main__':
-  jobs = []
+  entries_to_fetch = []
   for year in range(2006, 2022):
     for month in range(1, 13):
-      ymd_code = year * 100 + month
       for region_code in region_codes['code5']:
-        jobs.append([ymd_code, int(region_code)])
-
-
-  def fetch_and_insert(arg: Tuple[int, int]):
-    ymd_code, region_code = arg
-    fname = f'{ymd_code}-{region_code}.json'
-    fpath = os.path.join(TRADE_DATA_ROOT, fname)
-
-    if os.path.exists(fpath):
-      return
-
-    os.makedirs(TRADE_DATA_ROOT, exist_ok=True)
-    dn = TradeDownloader()
-    data = dn.get(ymd_code, region_code)
-
-    if len(data) > 0:
-      with open(fpath, 'w') as f:
-        content = json.dumps(data, ensure_ascii=False)
-        f.write(content)
-      col = korea_apartment_price.db.get_trades_collection()
-      col.insert_many(data)
-
-    time.sleep(0.1)
-
+        entries_to_fetch.append((year, month, int(region_code)))
 
   korea_apartment_price.db.create_indices()
 
-  for jobidx, job in enumerate(tqdm(jobs)):
+  print('[*] checking db/file trade entries')
+  entries_in_db = set(list_trade_entries_in_db())
+  entries_in_files = set(list_trade_entries_in_files())
+
+  print('[*] removing entries from db not presenting in filesystem')
+  to_be_removed_from_db = list(entries_in_db.difference(entries_in_files))
+  remove_trade_entries_from_db(to_be_removed_from_db)
+
+  print('[*] fetching trade entries and save them to db/fs')
+  entries_to_fetch = list(set(entries_to_fetch).difference(entries_in_files))
+  entries_to_fetch.sort()
+
+  for jobidx, job in enumerate(tqdm(entries_to_fetch)):
     fetch_and_insert(job)
