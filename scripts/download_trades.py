@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import datetime
 import os
 import sys
 
@@ -24,10 +25,10 @@ from korea_apartment_price.db import RowTrade
 from korea_apartment_price.utils import safe_int, safe_float
 
 
-region_codes = pd.read_csv(os.path.join(SCRIPT_ROOT, 'region_code.csv'))
+region_codes = pd.read_csv(os.path.join(SCRIPT_ROOT, 'trades_region_code.csv'))
 
 class TradeDownloader:
-  def __init__(self, timeout:float=5.0):
+  def __init__(self, timeout:float=20.0):
     self.api_key = get_cfg()['API_KEY']
     self.timeout = timeout
 
@@ -172,7 +173,7 @@ def remove_trade_entries_from_db(ymregions: List[Tuple[int, int, int]]):
 
 def fetch_and_insert(arg: Tuple[int, int, int]):
   year, month, region_code = arg
-  ymd_code = year * 10 + month
+  ymd_code = year * 100 + month
 
   fname = f'{year:04d}{month:02d}-{region_code}.json'
   fpath = os.path.join(TRADE_DATA_ROOT, fname)
@@ -196,6 +197,8 @@ def fetch_and_insert(arg: Tuple[int, int, int]):
       f.write(content)
     col = korea_apartment_price.db.get_trades_collection()
     col.insert_many(data)
+  else:
+    print(f'Warning: failed to fetch {fname}')
 
   time.sleep(0.1)
 
@@ -203,8 +206,11 @@ def fetch_and_insert(arg: Tuple[int, int, int]):
 
 if __name__ == '__main__':
   entries_to_fetch = []
-  for year in range(2006, 2022):
+  now = datetime.datetime.now()
+  for year in range(2006, now.year+1):
     for month in range(1, 13):
+      if year > now.year or year == now.year and month > now.month:
+        continue
       for region_code in region_codes['code5']:
         entries_to_fetch.append((year, month, int(region_code)))
 

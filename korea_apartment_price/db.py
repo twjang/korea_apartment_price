@@ -1,5 +1,7 @@
-from typing import Callable, Optional, List, TypedDict, Union, Dict, Any
+from enum import Enum
+from typing import Callable, Optional, List, Tuple, TypedDict, Union, Dict, Any
 
+import datetime
 import pymongo
 from pymongo import MongoClient
 from pymongo.database import Database
@@ -29,6 +31,7 @@ _trades_collection: Optional[Collection] = None
 _geocodes_collection: Optional[Collection] = None
 _kbliiv_apt_collection: Optional[Collection] = None
 _kbliiv_apt_type_collection: Optional[Collection] = None
+_kbliiv_apt_orderbook_collection: Optional[Collection] = None
 
 
 def get_conn()->MongoClient:
@@ -187,6 +190,8 @@ class RowKBApart(TypedDict):
   addrcode: Optional[int]          # 도로명코드
   addrcode_bld: Optional[int]      # 도로명건물본번호코드
   addrcode_bld_sub: Optional[int]  # 도로명건물부번호코드
+  lawaddrcode_city: Optional[int]  # 법정동코드(시)
+  lawaddrcode_dong: Optional[int]  # 법정동코드(동)
   lat: float                       # 위도
   lng: float                       # 경도
   detail: Any                      # 기타 상세정보
@@ -198,6 +203,33 @@ class RowKBApartType(TypedDict):
   name: str       # 아파트 명
   size: int       # 전용면적(평)
   detail: Any     # 기타 상세정보
+
+
+class RowKBApartOrderbook(TypedDict):
+  _id: Any
+  id: int         # 면적 일련번호
+  apart_id: int   # KB 단지기본일련번호
+  name: str       # 아파트 명
+  size: int       # 전용면적(평)
+  detail: Any     # 기타 상세정보
+
+class TradeType(Enum):
+  WHOLE = 1       # 매매
+  FULL_RENT = 2   # 전세
+  RENT = 3        # 월세
+
+class RowKBOrderbook(TypedDict):
+  _id: Any
+  apart_id: int                           # KB 단지기본일련번호
+  price: Union[Tuple[float,float], float] # 매매가/전세가/(보증금,월세)
+  size: float                             # 전용면적(평)
+  confirmed_at: datetime.datetime         # 확인일자
+  fetched_at: datetime.datetime           # 다운로드일시
+  floor: str                              # 층수
+  apt_dong: Optional[str]                 # 건물동명
+  apt_ho: Optional[str]                   # 건물호명
+  trade_type: TradeType                   # 매물거래구분
+  detail: Any                             # 세부사항
 
 def get_kbliiv_apt_collection()->Collection:
   global _kbliiv_apt_collection
@@ -211,6 +243,11 @@ def get_kbliiv_apt_type_collection()->Collection:
     _kbliiv_apt_type_collection = get_db()['kbliiv_apt_type']
   return _kbliiv_apt_type_collection
 
+def get_kbliiv_apt_orderbook_collection()->Collection:
+  global _kbliiv_apt_orderbook_collection
+  if _kbliiv_apt_orderbook_collection is None:
+    _kbliiv_apt_orderbook_collection = get_db()['kbliiv_apt_orderbook']
+  return _kbliiv_apt_orderbook_collection
 
 def query_kb_apart(apt_id: ApartmentId)->RowKBApart:
   trade_col = get_trades_collection()
@@ -229,6 +266,23 @@ def query_kb_apart(apt_id: ApartmentId)->RowKBApart:
   })
   return kb_apt
 
+def query_kb_apart_by_lawaddrcode(lawaddrcode: int)->List[RowKBApart]:
+  kb_col = get_kbliiv_apt_collection()
+  str_lawaddrcode = str(lawaddrcode)
+  if len(str_lawaddrcode) > 5: 
+    query = {
+      'lawaddrcode_city': int(str_lawaddrcode[:5]),
+      'lawaddrcode_dong': int(str_lawaddrcode[5:]),
+    }
+  else:
+    query = {
+      'lawaddrcode_city': int(str_lawaddrcode[:5]),
+    }
+
+  kb_apts: List[RowKBApart] = kb_col.find(query)
+  return kb_apts
+
+
 
 def query_kb_apart_types(apt_id: ApartmentId)->List[RowKBApartType]:
   col = get_kbliiv_apt_type_collection()
@@ -246,6 +300,9 @@ def create_indices():
   col.create_index('name')
   col.create_index('date_serial')
   col.create_index('size')
+  col.create_index('year')
+  col.create_index('month')
+  col.create_index('date')
 
   col = get_geocodes_collection()
   col.create_index('addrcode_city')
@@ -259,8 +316,18 @@ def create_indices():
   col.create_index('addrcode')
   col.create_index('addrcode_bld')
   col.create_index('addrcode_bld_sub')
+  col.create_index('lawaddrcode_city')
+  col.create_index('lawaddrcode_dong')
 
   col = get_kbliiv_apt_type_collection()
   col.create_index('id')
   col.create_index('apart_id')
   col.create_index('size')
+
+  col = get_kbliiv_apt_orderbook_collection()
+  col.create_index('apart_id')
+  col.create_index('size')
+  col.create_index('price')
+  col.create_index('confirmed_at')
+  col.create_index('fetched_at')
+  col.create_index('trade_type')

@@ -1,7 +1,7 @@
 
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union
 
-__all__ = ['safe_convert', 'safe_int', 'safe_float']
+__all__ = ['safe_convert', 'safe_int', 'safe_float', 'keyfilt', 'keyconvert']
 T = TypeVar('T')
 
 def safe_convert(val: Any, func: Callable[[Any], T], default: Optional[T]=None)->Optional[T]:
@@ -27,10 +27,23 @@ def keyfilt(val: Dict[str, Any], mappings:List[
   res = {}
   for m in mappings:
     if isinstance(m, str):
-      res[m] = val[m]
+      res[m] = val.get(m, None)
     elif isinstance(m, tuple) and len(m) == 2:
-      res[m[1]] = val[m[0]]
+      res[m[1]] = val.get(m[0], None)
     else:
       f = m[2]
-      res[m[1]] = f(val[m[0]])
+      if m[0] in val:
+        res[m[1]] = f(val[m[0]])
+      else:
+        res[m[1]] = f(None)
+  return res
+
+
+def keyconvert(val: Dict[str, Any], mappings: Dict[str, Callable[[Any], Any]])->Dict[str, Any]:
+  res = {}
+  for key in val:
+    if key in mappings:
+      res[key] = mappings[key](val[key])
+    else:
+      res[key] = val[key]
   return res

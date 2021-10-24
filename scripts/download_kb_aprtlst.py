@@ -6,6 +6,7 @@ from typing import List
 ROOT=os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(ROOT)
 
+import argparse
 import time
 import math
 import pickle
@@ -17,14 +18,21 @@ from korea_apartment_price.utils.converter import keyfilt, safe_float, safe_int
 from korea_apartment_price.path import *
 from korea_apartment_price import db
 
+def parse_args():
+  parser = argparse.ArgumentParser()
+  parser.add_argument('--skip_downloaded', action='store_false', help='skip already downloaded apartments')
+  parser.add_argument('--truncate_db', action='store_true', help='drop collection before downloading')
+  parser.add_argument('--disable_cache', action='store_true', help='do not load previously downloaded gu list')
+  return parser.parse_args()
 
+args = parse_args()
 gu_lst = None
 apt_lst = None
 is_updated = True
 crawler = KBLiivCrawler()
 
 path_cache = os.path.join(CACHE_ROOT, 'kb_apt_summary.pkl')
-if os.path.exists(path_cache):
+if os.path.exists(path_cache) and not args.disable_cache:
   is_updated = False
   with open(path_cache, 'rb') as f:
     gu_lst, apt_lst = pickle.load(f)
@@ -72,12 +80,18 @@ db.create_indices()
 apt_col = db.get_kbliiv_apt_collection()
 apt_type_col = db.get_kbliiv_apt_type_collection()
 
-skip_downloaded = True
+
+if args.truncate_db:
+  apt_col.drop()
+  apt_type_col.drop()
+  apt_col = db.get_kbliiv_apt_collection()
+  apt_type_col = db.get_kbliiv_apt_type_collection()
+
 
 prog_bar = tqdm(apt_lst)
 for apt_ent in prog_bar:
   apt_id = safe_int(apt_ent['단지기본일련번호'])
-  if apt_col.count_documents({'_id': apt_id}) > 0 and skip_downloaded:
+  if apt_col.count_documents({'_id': apt_id}) > 0 and args.skip_downloaded:
     continue
   
   apt_info = None
@@ -93,20 +107,29 @@ for apt_ent in prog_bar:
       time.sleep(10)
       prog_bar.display(f'retrying {apt_id}')
   
-  addrcode_a = None
-  addrcode_b = None
+  addrcode_city = None
+  addrcode = None
+  lawaddrcode_city = None
+  lawaddrcode_dong = None
+
   if apt_info['도로명우편번호'] is not None: 
-    addrcode_a = apt_info['도로명우편번호'][:5]
-    addrcode_b = apt_info['도로명우편번호'][5:]
+    addrcode_city = apt_info['도로명우편번호'][:5]
+    addrcode = apt_info['도로명우편번호'][5:]
+  
+  if apt_info['법정동코드'] is not None:
+    lawaddrcode_city = apt_info['법정동코드'][:5]
+    lawaddrcode_dong = apt_info['법정동코드'][5:]
 
   row_apt: RowKBApart = {
     'id': apt_id,
     '_id': apt_id,
     'name': apt_info['단지명'],
-    'addrcode_city': safe_int(addrcode_a),
-    'addrcode': safe_int(addrcode_b),
+    'addrcode_city': safe_int(addrcode_city),
+    'addrcode': safe_int(addrcode),
     'addrcode_bld': safe_int(apt_info['도로명건물본번']),
     'addrcode_bld_sub': safe_int(apt_info['도로명건물부번']),
+    'lawaddrcode_city': safe_int(lawaddrcode_city),
+    'lawaddrcode_dong': safe_int(lawaddrcode_dong),
     'lat': safe_float(apt_info['wgs84위도']),
     'lng': safe_float(apt_info['wgs84경도']),
     'detail': apt_info
@@ -126,20 +149,3 @@ for apt_ent in prog_bar:
     apt_type_col.replace_one({'_id': apt_type_id}, row_apt_type, upsert=True)
 
 print('[+] Done')
-exit(0)
-
-print(apts)
-data = crawler.orderbook(12907)
-#print(sorted(list(data[0].keys())))
-
-data = [keyfilt(e, [
-  ('매매가', 'price', lambda x: safe_float(x) / 10000),
-  ('전용면적', 'size', lambda x: int(x * 0.3)),
-  ('매물확인년월일', 'confirmed_at'),
-  ('해당층수', 'floor'),
-]) for e in data if e['매물거래구분'] == '1']
-
-data.sort(key=lambda e:(e['size'], e['price']))
-
-import pprint
-pprint.pprint (data)

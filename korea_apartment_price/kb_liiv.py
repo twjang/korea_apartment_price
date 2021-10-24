@@ -1,6 +1,10 @@
+import datetime
 import requests
-from typing import Optional
+from typing import Any, List, Optional
 from enum import Enum
+from korea_apartment_price.db import RowKBOrderbook, TradeType
+
+from korea_apartment_price.utils.converter import keyfilt, safe_float, safe_int
 
 class KBDo(Enum):
   SEOUL = '서울시'
@@ -20,6 +24,30 @@ class KBDo(Enum):
   KYONGBUK = '경상북도'
   KYONGNAM = '경상남도'
   JEJU = '제주도'
+
+def _convert_date(d: str)->datetime.datetime:
+  now = datetime.datetime.now()
+  year = now.year
+  cur_month = now.month
+  ents = d.split('.')
+  if len(ents) == 3: 
+    year, month, date = [int(e) for e in ents]
+  elif len(ents) == 2:
+    month, date = [int(e) for e in ents]
+  else: 
+    raise ValueError(f'cannot parse "{d}"')
+  
+  if cur_month < month:
+    year -= 1
+  
+  return datetime.datetime(year, month, date)
+
+
+def _convert_trade_type(d: str)->Optional[TradeType]:
+  idx = safe_int(d)
+  if idx is None: return None
+  return TradeType._value2member_map_[idx]
+
 
 class KBLiivCrawler:
   def __init__(self, timeout:float=5.0):
@@ -91,7 +119,60 @@ class KBLiivCrawler:
 
     return (total_cnt, res)
 
-  def orderbook(self, apt_id: int, order_by: str='date', aggregate: bool=True, items_per_page:int=10, page_idx=1):
+  def orderbook(self, apt_id: int, order_by: str='date', aggregate: bool=True):
     cnt, _ = self.partial_orderbook(apt_id, order_by, aggregate, 10, 1)
     cnt, res = self.partial_orderbook(apt_id, order_by, aggregate, cnt, 1)
     return res
+
+  def cleansed_orderbook(self, apt_id: int, order_by: str='date', aggregate: bool=True, trade_types: Optional[List[TradeType]]=None, sizes: Optional[List[float]]=None, include_detail:bool=True)->List[RowKBOrderbook]:
+    now = datetime.datetime.now()
+
+    orig_data =self.orderbook(apt_id, order_by, aggregate)
+    data = [keyfilt(e, [
+      ('매매가', 'price', safe_float),
+      ('전용면적', 'size', lambda x: int(x * 0.3)),
+      ('매물확인년월일', 'confirmed_at', _convert_date),
+      ('해당층수', 'floor'),
+      ('건물동명', 'apt_dong'),
+      ('건물호명', 'apt_ho'),
+      ('매물거래구분', 'trade_type', _convert_trade_type),
+      ('', 'fetched_at', lambda _: now),
+      ('', 'apart_id', lambda _: apt_id),
+    ]) for e in orig_data]
+
+    for dataidx, e in enumerate(orig_data):
+      cur_trade_type = data[dataidx]['trade_type']
+      if cur_trade_type == TradeType.WHOLE:
+        data[dataidx]['price'] = safe_float(e['매매가'])
+      elif cur_trade_type == TradeType.FULL_RENT:
+        data[dataidx]['price'] = safe_float(e['전세가'])
+      elif cur_trade_type == TradeType.RENT:
+        price_a = safe_float(e['월세보증금'])
+        price_b = safe_float(e['월세가'])
+        data[dataidx]['price'] = (price_a, price_b)
+
+    if include_detail:
+      for dataidx, e in enumerate(orig_data):
+        data[dataidx]['detail'] = e
+
+    if trade_types is None:
+      trade_type_values = set([e.value for e in TradeType])
+    else:
+      trade_type_values = set([e.value for e in trade_types])
+
+    new_data = []
+    for e in data:
+      if e['trade_type'] is not None and e['trade_type'].value in trade_type_values:
+        new_data.append(e)
+    data = new_data
+
+    if sizes is not None:
+      new_data = []
+      for e in data:
+        size_diff = min([abs(s - e['size']) for s in sizes])
+        if size_diff < 1.0:
+          new_data.append(e)
+      data = new_data
+
+    data.sort(key=lambda e:(e['size'], e['price']))
+    return data
