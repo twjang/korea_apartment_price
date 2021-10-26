@@ -205,14 +205,6 @@ class RowKBApartType(TypedDict):
   detail: Any     # 기타 상세정보
 
 
-class RowKBApartOrderbook(TypedDict):
-  _id: Any
-  id: int         # 면적 일련번호
-  apart_id: int   # KB 단지기본일련번호
-  name: str       # 아파트 명
-  size: int       # 전용면적(평)
-  detail: Any     # 기타 상세정보
-
 class TradeType(Enum):
   WHOLE = 1       # 매매
   FULL_RENT = 2   # 전세
@@ -291,6 +283,33 @@ def query_kb_apart_types(apt_id: ApartmentId)->List[RowKBApartType]:
     'apart_id': kb_apt['id']
   })
   return kb_apt_types
+
+def query_kb_orderbook(apt_id: ApartmentId, size_from: Optional[int]=None, size_to:Optional[int]=None, fetched_from:Optional[int]=None, fetched_to: Optional[int]=None)->List[RowKBOrderbook]:
+  kb_apt = query_kb_apart(apt_id)
+  col = get_kbliiv_apt_orderbook_collection()
+
+  cond = [{
+    'apart_id': kb_apt['id'],
+  }]
+  if size_from is not None:
+    cond.append({'size': {"$gte": size_from}})
+
+  if size_to is not None:
+    cond.append({'size': {"$lte": size_to}})
+
+  if fetched_from is not None:
+    year = fetched_from // 10000
+    month = (fetched_from // 100) % 100
+    day = fetched_from % 100
+    cond.append({'fetched_at': {"$gte": datetime.datetime(year, month, day)}})
+
+  if fetched_to is not None:
+    year = fetched_to // 10000
+    month = (fetched_to // 100) % 100
+    day = fetched_to % 100
+    cond.append({'fetched_at': {"$lte": datetime.datetime(year, month, day)}})
+
+  return col.find({'$and':cond})
 
 
 def create_indices():
