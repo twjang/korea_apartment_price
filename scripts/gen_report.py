@@ -23,7 +23,19 @@ def date_serial2date(x:int):
 
 def draw_graph(apts: List[ApartmentId]):
   fig = make_subplots(rows=len(apts), cols=1, shared_xaxes=True, vertical_spacing=0)
-  fig.update_layout(height=len(apts)* 500)
+  fig.update_layout(
+    height=len(apts)* 500, 
+    title={
+      'text':f"{datetime.datetime.now().strftime('%Y-%m-%d 아파트 보고서')}",
+      'xanchor': 'center',
+      'yanchor': 'top',
+      'x': 0.5,
+      'y': 1.0 - 0.1/len(apts),
+      'font': {
+        'size': 30,
+      },
+    }
+  )
 
   for aptidx, apt in tqdm(enumerate(apts), total=len(apts)):
     cur_rowidx = aptidx + 1 
