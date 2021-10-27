@@ -22,7 +22,7 @@ def date_serial2date(x:int):
 
 
 def draw_graph(apts: List[ApartmentId]):
-  fig = make_subplots(rows=len(apts), cols=1, shared_xaxes=True, vertical_spacing=0)
+  fig = make_subplots(rows=len(apts), cols=1, shared_xaxes=True, vertical_spacing=0, subplot_titles=["plot" for _ in range(len(apts))])
   fig.update_layout(
     height=len(apts)* 500, 
     title={
@@ -37,13 +37,17 @@ def draw_graph(apts: List[ApartmentId]):
     }
   )
 
+  subplot_titles = []
   for aptidx, apt in tqdm(enumerate(apts), total=len(apts)):
     cur_rowidx = aptidx + 1 
     cur_colidx = 1
 
     sizes = set(korea_apartment_price.db.query_trades(apt_ids=[apt], filters=[korea_apartment_price.db.pick_size]))
-    chosen_size = list(sorted([(abs(s-18), s) for s in sizes]))[0][1]
-    trades = korea_apartment_price.db.query_trades(apt_ids=[apt], size_from=chosen_size-1, size_to=chosen_size+1,date_from=20210101)
+    favorite_size = apt['size']
+    chosen_size = list(sorted([(abs(s-favorite_size), s) for s in sizes]))[0][1]
+    trades = korea_apartment_price.db.query_trades(apt_ids=[apt], size_from=chosen_size-0.9, size_to=chosen_size+0.9,date_from=20210101)
+    subplot_title=f'{apt["address"]} {apt["name"]} (전용 {chosen_size}평)'
+    subplot_titles.append(subplot_title)
 
     kb_orderbook = sorted(korea_apartment_price.db.query_kb_orderbook(apt, size_from=chosen_size-1, size_to=chosen_size+1), key=lambda x: x['fetched_at'])
     fetched_date_cnt = {}
@@ -59,9 +63,7 @@ def draw_graph(apts: List[ApartmentId]):
 
     el = go.Scatter(x=trades_x, y=trades_y, showlegend = False, marker={'color': 'blue', 'size': 10}, mode='markers', name='실거래가')
     fig.add_trace(el, row=cur_rowidx, col=cur_colidx)
-    #if cur_rowidx == len(apts):
-    #  fig.update_xaxes(title='날짜', row=cur_rowidx, col=cur_colidx)
-    fig.update_yaxes(title=f'{apt["address"]} {apt["name"]}', row=cur_rowidx, col=cur_colidx)
+    fig.update_yaxes(title='가격(억)', row=cur_rowidx, col=cur_colidx)
 
     fetched_date_idx = -1
 
@@ -101,6 +103,9 @@ def draw_graph(apts: List[ApartmentId]):
       fig['layout'][ax]['mirror']=True
     if ax == f'xaxis{len(apts)}':
       fig['layout'][ax]['title']="날짜"
+  
+  for sidx, subplot_title in enumerate(subplot_titles):
+    fig.layout.annotations[sidx].update(text=subplot_title, x=0.025, xanchor='left', y=1.0 - sidx / len(subplot_titles), yanchor='top')
 
   return fig
 
@@ -117,16 +122,25 @@ print('[+] reading apartment list')
 with open(args.aptlst, 'r') as f:
   for line in tqdm(f.readlines()):
     line = line.strip()
-    line = line.split(',', 1)
-    if len(line) != 2:
+    line = line.split(',', 2)
+    if len(line) not in [2, 3]:
       print (f'Warning: ignoring line "{line}"')
       continue
-    addr, name = [s.strip() for s in line]
-    apts+=korea_apartment_price.shortcuts.search(addr, name)
+    if len(line) == 2:
+      addr, name = [s.strip() for s in line]
+      size = 18
+    else:
+      addr, name, size = [s.strip() for s in line]
+      size = int(size)
+    selected=korea_apartment_price.shortcuts.search(addr, name)
+    for apt in selected:
+      apt['size'] = size
+    apts += selected
+
 
 uniq_apts = {}
 for apt in apts:
-  uniq_apts[(apt['address'], apt['name'])] = apt
+  uniq_apts[(apt['address'], apt['name'], apt['size'])] = apt
 
 apts = [uniq_apts[k] for k in sorted(uniq_apts.keys())]
 
