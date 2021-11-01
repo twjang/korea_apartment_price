@@ -1,4 +1,4 @@
-
+import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union
 
 __all__ = ['safe_convert', 'safe_int', 'safe_float', 'keyfilt', 'keyconvert']
@@ -9,6 +9,25 @@ def safe_convert(val: Any, func: Callable[[Any], T], default: Optional[T]=None)-
   try: res = func(val)
   except: pass
   return res
+
+def _datestr_to_dateserial(x: str)-> int:
+  now = datetime.datetime.now()
+  year = now.year
+  x = x.split('.')
+  if len(x) == 2:
+    month = int(x[0])
+    date = int(x[1])
+  elif len(x) == 3:
+    year = int(x[0])
+    month = int(x[1])
+    date = int(x[2])
+    if 0 <= year and year < 30: year += 2000
+    elif year < 99: year += 1900
+  else: raise ValueError(f'unknown parse date string"({x})"')
+  return year * 10000 + month * 100 + date
+
+def safe_date_serial(val: Any, default:Optional[int]=None)->Optional[int]:
+  return safe_convert(val, _datestr_to_dateserial, default)
 
 def safe_int(val: Any, default: Optional[int]=None)-> Optional[int]:
   return safe_convert(val, int, default)

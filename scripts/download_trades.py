@@ -12,7 +12,9 @@ import time
 import json
 
 import korea_apartment_price
-from typing import Callable, List, Dict, Any, Optional, Tuple, TypeVar
+from korea_apartment_price.utils.converter import safe_date_serial
+from typing import List, Tuple 
+
 
 import re
 import pandas as pd
@@ -36,6 +38,7 @@ class TradeDownloader:
     num_rows = 1000
     res = []
     keylist = [
+      ('일련번호', 'serial'),
       ('거래금액', 'price'),
       ('건축년도', 'created_at'),
       ('도로명', 'addr_road'),
@@ -59,6 +62,8 @@ class TradeDownloader:
       ('지번', 'jibun'),
       ('지역코드', 'location_code'),
       ('층', 'floor'),
+      ('해제여부', 'is_canceled'),
+      ('해제사유발생일', 'canceled_date'),
     ]
 
     cur_page = 1
@@ -84,13 +89,15 @@ class TradeDownloader:
         item_en = {}
         for key, key_en in keylist:
           elem = v.find(key)
-          item[key] = elem.text if elem is not None else None
+          item[key] = elem.text.strip() if elem is not None else None
 
         item['매매일'] = safe_int(item['년'], 0) * 10000 + safe_int(item['월'], 0) * 100 + safe_int(item['일'], 0)
         item['거래금액'] = safe_int(item['거래금액'].replace(',', ''))
         item['전용면적'] = safe_float(item['전용면적'])
         item['층'] = safe_int(item['층'].strip())
         item['건축년도'] = safe_int(item['건축년도'])
+        item['해제여부'] = item.get('해제여부', '') != ''
+        item['해제사유발생일'] = safe_date_serial(item.get('해제사유발생일', None)) 
 
         for intkey, _ in [
           ('도로명건물본번호코드', 'addrcode_bld'),

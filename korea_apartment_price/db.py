@@ -67,29 +67,31 @@ def pick_price(ent)->float:
 
 class RowTrade(TypedDict):
   _id: Any
-  price: int       # 가격
-  created_at: int    # 건축년도
-  addr_road: str     # 도로명
-  addrcode_bld: int    # 도로명건물본번호코드
+  price: int             # 가격
+  created_at: int        # 건축년도
+  addr_road: str         # 도로명
+  addrcode_bld: int      # 도로명건물본번호코드
   addrcode_bld_sub: int  # 도로명건물부번호코드
-  addrcode_city: int   # 도로명시군구코드
+  addrcode_city: int     # 도로명시군구코드
   addrcode_serial: int   # 도로명일련번호코드
-  addrcode: int      # 도로명코드
-  lawaddr_dong: str    # 법정동
+  addrcode: int          # 도로명코드
+  lawaddr_dong: str      # 법정동
   lawaddrcode_main: int  # 법정동본번코드
   lawaddrcode_sub: int   # 법정동부번코드
   lawaddrcode_city: int  # 법정동시군구코드
   lawaddrcode_dong: int  # 법정동읍면동코드
   lawaddrcode_jibun: int # 법정동지번코드
-  name: str        # 아파트
-  date_serial: int     # 매매일
-  year: int        # 년
-  month: int       # 월
-  date: int        # 일
-  size: float      # 전용면적
+  name: str              # 아파트
+  date_serial: int       # 매매일
+  year: int              # 년
+  month: int             # 월
+  date: int              # 일
+  size: float            # 전용면적
   jibun: Union[str, int] # 지번
-  location_code: int   # 지역코드
-  floor: int       # 층
+  location_code: int     # 지역코드
+  floor: int             # 층
+  is_canceled: bool      # 취소여부
+  canceled_date: int     # 취소일
 
 class ApartmentId(TypedDict):
   address: str   # 주소
@@ -105,6 +107,7 @@ def query_trades(
   size_from:Optional[int]=None,
   size_to:Optional[int]=None,
   filters:Optional[List[Callable]]=None,
+  include_canceled:bool = False
 )->List[Dict[str, Any]]:
 
   if apt_ids is None and (lawaddrcode is None or names is None):
@@ -142,6 +145,8 @@ def query_trades(
     })
 
   cond['$or'] = cond_apt_info
+  if not include_canceled:
+    cond['is_canceled'] = False
 
   col = get_trades_collection()
   cursor = col.find({'$query':cond, '$orderby':{ 'date_serial': 1 }})
@@ -322,6 +327,8 @@ def create_indices():
   col.create_index('year')
   col.create_index('month')
   col.create_index('date')
+  col.create_index('is_canceled')
+  col.create_index('canceled_date')
 
   col = get_geocodes_collection()
   col.create_index('addrcode_city')
