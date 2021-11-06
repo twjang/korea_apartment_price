@@ -13,7 +13,7 @@ import json
 
 import korea_apartment_price
 from korea_apartment_price.utils.converter import safe_date_serial
-from typing import List, Tuple 
+from typing import List, Tuple
 
 
 import re
@@ -97,7 +97,7 @@ class TradeDownloader:
         item['층'] = safe_int(item['층'].strip())
         item['건축년도'] = safe_int(item['건축년도'])
         item['해제여부'] = item.get('해제여부', '') != ''
-        item['해제사유발생일'] = safe_date_serial(item.get('해제사유발생일', None)) 
+        item['해제사유발생일'] = safe_date_serial(item.get('해제사유발생일', None))
 
         for intkey, _ in [
           ('도로명건물본번호코드', 'addrcode_bld'),
@@ -136,7 +136,8 @@ def list_trade_entries_in_db()->List[Tuple[int, int, int]]:
         "lawaddrcode_city": "$lawaddrcode_city",
         "year": "$year",
         "month": "$month",
-      }
+      },
+      "count": {'$sum':1}
     }
   }])
   res = []
@@ -145,7 +146,8 @@ def list_trade_entries_in_db()->List[Tuple[int, int, int]]:
     month = safe_int(entry['_id']['month'])
     lawaddrcode_city = safe_int(entry['_id']['lawaddrcode_city'])
     ymregion = (year, month, lawaddrcode_city)
-    res.append(ymregion)
+    if entry['count'] > 0:
+      res.append(ymregion)
   return res
 
 
@@ -167,7 +169,7 @@ def list_trade_entries_in_files()->List[Tuple[int, int, int]]:
 def remove_trade_entries_from_db(ymregions: List[Tuple[int, int, int]]):
   col = korea_apartment_price.db.get_trades_collection()
 
-  for year, month, lawaddrcode_city in ymregions:
+  for year, month, lawaddrcode_city in tqdm(ymregions):
     col.delete_many({
       '$and': [
         {'$expr': { '$eq': [ "$year", year ] }},
@@ -227,8 +229,8 @@ if __name__ == '__main__':
   entries_in_db = set(list_trade_entries_in_db())
   entries_in_files = set(list_trade_entries_in_files())
 
-  print('[*] removing entries from db not presenting in filesystem')
   to_be_removed_from_db = list(entries_in_db.difference(entries_in_files))
+  print(f'[*] removing {len(to_be_removed_from_db)} entries from db not presenting in filesystem')
   remove_trade_entries_from_db(to_be_removed_from_db)
 
   print('[*] fetching trade entries and save them to db/fs')
