@@ -50,7 +50,7 @@ def _convert_trade_type(d: str)->Optional[TradeType]:
 
 
 class KBLiivCrawler:
-  def __init__(self, timeout:float=5.0):
+  def __init__(self, timeout:float=60.0):
     self.url = 'https://api.kbland.kr'
     self.timeout = timeout
 

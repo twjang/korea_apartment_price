@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import traceback
 import datetime
 import os
 import sys
@@ -62,8 +63,14 @@ for apt_id, apt_name in tqdm(apt_idnames):
   while data is None:
     try:
       data = crawler.cleansed_orderbook(apt_id, trade_types=[db.TradeType.WHOLE])
-    except requests.exceptions.Timeout:
-      time.sleep(5.0)
+    except KeyboardInterrupt as e:
+      print('Ctrl+C detected. just retrying..')
+      time.sleep(1.0)
+    except Exception as e:
+      print(f'Exception: {e}')
+      print(traceback.format_exc())
+      print(f'failed to retrieve apt_name={apt_name} apt_id={apt_id}. retrying..')
+      time.sleep(1.0)
 
   if len(data) > 0:
     col.insert_many([keyconvert(e, {'trade_type': lambda x: x.value}) for e in data])
