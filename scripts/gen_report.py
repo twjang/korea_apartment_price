@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from typing import List, Optional, Tuple
 import datetime
+import re
 import io
 import base64
 import os
@@ -18,7 +19,7 @@ import plotly
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import korea_apartment_price
-from korea_apartment_price.db import ApartmentId
+from korea_apartment_price.db import ApartmentId, EntryNotFound
 
 
 def date_serial2date(x:int):
@@ -28,16 +29,18 @@ def date_serial2date(x:int):
   return datetime.datetime(year, month, date)
 
 
-def render_graph(apt: ApartmentId, date_from=20210101)->Tuple[str, FigureWidget]:
-  sizes = set(korea_apartment_price.db.query_trades(apt_ids=[apt], filters=[korea_apartment_price.db.pick_size], date_from=date_from, include_canceled=True))
+def render_graph(apts: List[ApartmentId], date_from=20210101)->Tuple[str, FigureWidget]:
+  sizes = set(korea_apartment_price.db.query_trades(apt_ids=apts, filters=[korea_apartment_price.db.pick_size], date_from=date_from, include_canceled=True))
   if len(sizes) == 0: 
-    sizes = set([apt['size']])
-  favorite_size = apt['size']
+    sizes = set([apt['size'] for apt in apts])
+  favorite_size = apts[0]['size']
   chosen_size = list(sorted([(abs(s-favorite_size), s) for s in sizes]))[0][1]
 
   fig = go.Figure()
 
-  title=f'{apt["address"]} {apt["name"]} (전용 {chosen_size}평)'
+  aptname = re.sub(r'[0-9]+[ ]*단지[ ]*$', '', apts[0]["name"])
+
+  title=f'{apts[0]["address"]} {aptname} (전용 {chosen_size}평)'
   fig.update_layout(height = 500, margin=dict(l=10, r=10, b=10, t=10))
   fig.update_yaxes(
     showline=True,
@@ -55,7 +58,7 @@ def render_graph(apt: ApartmentId, date_from=20210101)->Tuple[str, FigureWidget]
   )
 
 
-  trades = korea_apartment_price.db.query_trades(apt_ids=[apt], size_from=chosen_size-0.9, size_to=chosen_size+0.9, date_from=date_from, include_canceled=True)
+  trades = korea_apartment_price.db.query_trades(apt_ids=apts, size_from=chosen_size-0.9, size_to=chosen_size+0.9, date_from=date_from, include_canceled=True)
   trades_x = [date_serial2date(t['date_serial']) for t in trades if not t['is_canceled']]
   trades_y = [t['price'] / 10000 for t in trades if not t['is_canceled']]
   labels = [f'{t["floor"]}층' for t in trades if not t['is_canceled']]
@@ -68,8 +71,13 @@ def render_graph(apt: ApartmentId, date_from=20210101)->Tuple[str, FigureWidget]
   fig.add_trace(el)
   fig.add_trace(el_canceled)
 
+  for apt in apts:
+    try:
+      kb_orderbook = sorted(korea_apartment_price.db.query_kb_orderbook(apt, size_from=chosen_size-1, size_to=chosen_size+1, fetched_from=date_from), key=lambda x: x['fetched_at'])
+      break
+    except EntryNotFound: 
+      pass
 
-  kb_orderbook = sorted(korea_apartment_price.db.query_kb_orderbook(apt, size_from=chosen_size-1, size_to=chosen_size+1, fetched_from=date_from), key=lambda x: x['fetched_at'])
   fetched_date_cnt = {}
   fetched_price_date_cnt = {}
   fetched_price_date_lbls = {}
@@ -149,6 +157,14 @@ for apt in apts:
 
 apts = [uniq_apts[k] for k in sorted(uniq_apts.keys())]
 
+uniq_apts = {}
+for apt in apts:
+  aptname = re.sub(r'[0-9]+[ ]*단지[ ]*$', '', apt["name"])
+  key = apt['address'], aptname, apt['size']
+  if not key in uniq_apts: uniq_apts[key] = []
+  uniq_apts[key].append(apt)
+apt_keys = sorted(uniq_apts.keys())
+
 print('[+] generating report')
 with open(args.output, 'w') as f:
   datestr = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -174,14 +190,15 @@ with open(args.output, 'w') as f:
   </style>
   </head>
 """)
-  for apt in apts:
-    print(f'{apt["address"]} {apt["name"]} [전용 {apt["size"]}평]')
+  for apt_addr, apt_name, apt_size in apt_keys:
+    print(f'{apt_addr} {apt_name} [전용 {apt_size}평]')
 
   titles = []
   grps = []
 
-  for aptidx, apt in enumerate(tqdm(apts)):
-    title, fig = render_graph(apt)
+  for aptidx, apt_key in enumerate(tqdm(apt_keys)):
+    apts = uniq_apts[apt_key]
+    title, fig = render_graph(apts)
     titles.append(title)
     grp_html = fig.to_html(full_html=False, include_plotlyjs=False, include_mathjax=False)
     grp_html = minify_html.minify(grp_html)

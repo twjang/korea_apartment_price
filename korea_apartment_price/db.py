@@ -228,6 +228,10 @@ class RowKBOrderbook(TypedDict):
   trade_type: TradeType                   # 매물거래구분
   detail: Any                             # 세부사항
 
+
+class EntryNotFound(Exception): pass
+
+
 def get_kbliiv_apt_collection()->Collection:
   global _kbliiv_apt_collection
   if _kbliiv_apt_collection is None:
@@ -261,6 +265,10 @@ def query_kb_apart(apt_id: ApartmentId)->RowKBApart:
     'addrcode_bld': ent['addrcode_bld'],
     'addrcode_bld_sub': ent['addrcode_bld_sub'],
   })
+
+  if kb_apt is None:
+    raise EntryNotFound('cannot find corresponding kb apart')
+
   return kb_apt
 
 def query_kb_apart_by_lawaddrcode(lawaddrcode: int)->List[RowKBApart]:
