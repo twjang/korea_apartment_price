@@ -2,11 +2,14 @@
 from typing import List, Optional, Tuple
 import datetime
 import io
+import base64
 import os
 import sys
 import argparse
 from plotly.missing_ipywidgets import FigureWidget
 from tqdm import tqdm
+import minify_html
+
 
 ROOT=os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(ROOT)
@@ -60,8 +63,8 @@ def render_graph(apt: ApartmentId, date_from=20210101)->Tuple[str, FigureWidget]
   canceled_trades_x = [date_serial2date(t['date_serial']) for t in trades if t['is_canceled']]
   canceled_trades_y = [t['price'] / 10000 for t in trades if t['is_canceled']]
   canceled_labels = [f'{t["floor"]}층(취소)' for t in trades if t['is_canceled']]
-  el = go.Scatter(x=trades_x, y=trades_y, showlegend = False, marker={'color': 'blue', 'size': 10}, mode='markers', hovertext=labels, name='실거래')
-  el_canceled = go.Scatter(x=canceled_trades_x, y=canceled_trades_y, showlegend = False, marker={'color': 'orange', 'size': 10, 'symbol': 'x'}, mode='markers', hovertext=canceled_labels, name='취소')
+  el = go.Scattergl(x=trades_x, y=trades_y, showlegend = False, marker={'color': 'blue', 'size': 10}, mode='markers', hovertext=labels, name='실거래')
+  el_canceled = go.Scattergl(x=canceled_trades_x, y=canceled_trades_y, showlegend = False, marker={'color': 'orange', 'size': 10, 'symbol': 'x'}, mode='markers', hovertext=canceled_labels, name='취소')
   fig.add_trace(el)
   fig.add_trace(el_canceled)
 
@@ -79,7 +82,7 @@ def render_graph(apt: ApartmentId, date_from=20210101)->Tuple[str, FigureWidget]
     fetched_date_cnt[date_end] = fetched_date_cnt.get(date_end, 0) + 1
     fetched_price_date_cnt[(date_end, price)] = fetched_price_date_cnt.get((date_end, price), 0) + 1
     if not (date_end, price) in fetched_price_date_lbls:
-      fetched_price_date_lbls[(date_end, price)] = []
+      fetched_price_date_lbls[(date_end, price)] = set()
 
     curlbl = ''
     if od['apt_dong'] is not None and len(od['apt_dong']) > 0:
@@ -89,14 +92,11 @@ def render_graph(apt: ApartmentId, date_from=20210101)->Tuple[str, FigureWidget]
     elif od['floor'] is not None and len(od['floor']) > 0:
       curlbl += f'{od["floor"]}'
     if curlbl == '': curlbl='정보없음'
-    fetched_price_date_lbls[(date_end, price)].append(curlbl)
+    fetched_price_date_lbls[(date_end, price)].add(curlbl)
 
   fetched_dates = sorted(fetched_date_cnt.keys())
 
   max_cnt = max([1] + list(fetched_price_date_cnt.values()))
-
-  for date_end, cnt in fetched_date_cnt.items():
-    fig.add_vline(x=date_end, line_width=0.3, line_dash='dash', line_color='green')
 
   for (date_end, price), cnt in sorted(fetched_price_date_cnt.items()):
     date_start = None
@@ -106,10 +106,10 @@ def render_graph(apt: ApartmentId, date_from=20210101)->Tuple[str, FigureWidget]
       date_start = date_end - datetime.timedelta(2)
 
     opacity = min(1.0, 0.1 + 0.9 * cnt / max_cnt)
-    fig.add_shape(x0=date_start, x1=date_end, y0=price, y1=price, line={'width':3, 'color':'red'}, opacity=opacity)
-    details = fetched_price_date_lbls[(date_end, price)]
+    fig.add_trace(go.Scattergl(x=[date_start, date_end], y=[price, price], line={'width':2, 'color':'red'}, marker=None, opacity=opacity, showlegend = False, name='', hoverinfo='skip', mode='lines'))
+    details = sorted(list(fetched_price_date_lbls[(date_end, price)]))
     details = '<br>' + '<br>'.join(sorted(details))
-    marker = go.Scatter(x=[date_end], y=[price], text=[f'{cnt}개 {details}'], marker={'color':'red', 'size':4}, opacity=opacity, showlegend = False, name='')
+    marker = go.Scattergl(x=[date_end], y=[price], text=[f'{cnt}개 {details}'], line=None, marker={'color':'red', 'size': 3}, opacity=opacity, showlegend = False, name='', mode='markers')
     fig.add_trace(marker)
 
   return title, fig
@@ -152,33 +152,82 @@ apts = [uniq_apts[k] for k in sorted(uniq_apts.keys())]
 print('[+] generating report')
 with open(args.output, 'w') as f:
   datestr = datetime.datetime.now().strftime('%Y-%m-%d')
-  f.write(f"""<!DOCTYPE html>
+  f.write("""<!DOCTYPE html>
 <html lang="kr">
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="x-ua-compatible" content="ie=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-    <title>{datestr} 아파트 보고서</title>
+""")
+  f.write(f"<title>{datestr} 아파트 보고서</title>")
+  f.write("""
     <script type="text/javascript" src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <script type="text/javascript" id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <link rel="stylesheet" href="//code.jquery.com/ui/1.13.0/themes/base/jquery-ui.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+    <script src="https://code.jquery.com/ui/1.13.0/jquery-ui.js"></script>
   <style>
-  div {{ margin:0; padding: 0; }}
-  body {{margin:0; padding:0; font-family: Candara, Calibri, Segoe, Segoe UI, Optima, Arial, sans-serif; }}
-  .wrap {{ width:calc(100% - 2em); padding: 0.3em; margin:auto; overflow-x: hidden; }}
+  div { margin:0; padding: 0; }
+  body { margin:0; padding:0; font-family: Candara, Calibri, Segoe, Segoe UI, Optima, Arial, sans-serif; }
+  #accordion { width:calc(100% - 2em); padding: 0.3em; margin:auto; overflow-x: hidden; }
+  .grpwrap { width:calc(100% - 2em); padding: 0em; margin:0; overflow-x: hidden; }
   </style>
   </head>
+""")
+  for apt in apts:
+    print(f'{apt["address"]} {apt["name"]} [전용 {apt["size"]}평]')
 
+  titles = []
+  grps = []
+
+  for aptidx, apt in enumerate(tqdm(apts)):
+    title, fig = render_graph(apt)
+    titles.append(title)
+    grp_html = fig.to_html(full_html=False, include_plotlyjs=False, include_mathjax=False)
+    grp_html = minify_html.minify(grp_html)
+    grp_base64 = base64.b64encode(grp_html.encode('utf-8')).decode('utf-8')
+    grps.append(grp_base64)
+
+  f.write("""<script>
+  let grpdata=[];
+  let prevActive=false;
+  $(function() { 
+    let menu = $("#accordion");
+    menu.accordion({
+      active: false,
+      collapsible: true, 
+      heightStyle: 'content',
+      activate: function (e, ui) {
+        let active = menu.accordion("option", "active");
+        if (prevActive !== false) {
+          $("#grp"+prevActive).html('');
+        }
+
+        if (active === false) { 
+          $(".grpwrap").html('');
+        } else {
+          let curgrp = atob(grpdata[active]);
+          $("#grp"+active).html(curgrp);
+        }
+        prevActive = active;
+      }
+    }); 
+  }); 
+  """)
+  for aptidx, grpdata in enumerate(tqdm(grps)):
+    f.write(f'grpdata.push("{grpdata}");\n')
+  f.write('</script>')
+
+  f.write(f"""
   <body>
     <h1 style="text-align: center;">{datestr} 아파트 보고서</h1>
-""")
-
-  for apt in tqdm(apts):
-    title, fig = render_graph(apt)
-    f.write('<div class="wrap">')
+    <div id="accordion">
+    """)
+  for aptidx, title in enumerate(tqdm(titles)):
     f.write(f'<h2>{title}</h2>')
-    f.write(fig.to_html(full_html=False, include_plotlyjs=False, include_mathjax=False))
+    f.write(f'<div class="grpwrap" id="grp{aptidx}">')
     f.write('</div>')
+
   f.write("""
   </div>
   </body>

@@ -4,3 +4,4 @@ pandas
 jamo
 pyproj
 py7zr
+minify-html
