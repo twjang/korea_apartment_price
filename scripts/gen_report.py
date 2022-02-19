@@ -76,6 +76,7 @@ def render_graph(apts: List[ApartmentId], date_from=20210101)->Tuple[str, Figure
       kb_orderbook = sorted(korea_apartment_price.db.query_kb_orderbook(apt, size_from=chosen_size-1, size_to=chosen_size+1, fetched_from=date_from), key=lambda x: x['fetched_at'])
       break
     except EntryNotFound: 
+      print(apt)
       pass
 
   fetched_date_cnt = {}

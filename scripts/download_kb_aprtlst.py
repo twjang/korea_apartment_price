@@ -130,6 +130,9 @@ for apt_ent in prog_bar:
     'addrcode_bld_sub': safe_int(apt_info['도로명건물부번']),
     'lawaddrcode_city': safe_int(lawaddrcode_city),
     'lawaddrcode_dong': safe_int(lawaddrcode_dong),
+    'lawaddrcode_main': safe_int(apt_info['본번지내용']),
+    'lawaddrcode_sub': safe_int(apt_info['부번지내용']),
+    'apttype': safe_int(apt_info['매물종별구분']),
     'lat': safe_float(apt_info['wgs84위도']),
     'lng': safe_float(apt_info['wgs84경도']),
     'detail': apt_info

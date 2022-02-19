@@ -2,12 +2,14 @@ from enum import Enum
 from typing import Callable, Optional, List, Tuple, TypedDict, Union, Dict, Any
 
 import datetime
+from pprintpp import pprint
 import pymongo
 from pymongo import MongoClient
 from pymongo.database import Database
 from pymongo.collection import Collection
 
 from korea_apartment_price.config import get_cfg
+from korea_apartment_price.utils import editdist
 from korea_apartment_price.utils.converter import safe_int
 
 __all__ = (
@@ -197,6 +199,9 @@ class RowKBApart(TypedDict):
   addrcode_bld_sub: Optional[int]  # 도로명건물부번호코드
   lawaddrcode_city: Optional[int]  # 법정동코드(시)
   lawaddrcode_dong: Optional[int]  # 법정동코드(동)
+  lawaddrcode_main: Optional[int]  # 법정동코드(본번)
+  lawaddrcode_sub: Optional[int]   # 법정동코드(부번)
+  apttype: Optional[int]           # 매물타입 (1-아파트, 4-오피스텔)
   lat: float                       # 위도
   lng: float                       # 경도
   detail: Any                      # 기타 상세정보
@@ -259,17 +264,48 @@ def query_kb_apart(apt_id: ApartmentId)->RowKBApart:
     'name': apt_id['name']
   })
 
-  kb_apt: RowKBApart = kb_col.find_one({
-    'addrcode_city': ent['addrcode_city'],
-    'addrcode': ent['addrcode'],
-    'addrcode_bld': ent['addrcode_bld'],
-    'addrcode_bld_sub': ent['addrcode_bld_sub'],
+  # search based on address
+  kb_apts: RowKBApart = kb_col.find({
+    'lawaddrcode_city': ent['lawaddrcode_city'],
+    'lawaddrcode_dong': ent['lawaddrcode_dong'],
+    'lawaddrcode_main': ent['lawaddrcode_main'],
+    'lawaddrcode_sub': ent['lawaddrcode_sub'],
+    'apttype': 1,
   })
 
-  if kb_apt is None:
-    raise EntryNotFound('cannot find corresponding kb apart')
+  kb_apts = list(kb_apts)
 
-  return kb_apt
+  # fallback to best matching name
+  if len(kb_apts) == 0:
+    kb_apts: RowKBApart = kb_col.find({
+      'lawaddrcode_city': ent['lawaddrcode_city'],
+      'lawaddrcode_dong': ent['lawaddrcode_dong'],
+      'apttype': 1,
+    })
+    kb_apts = list(kb_apts)
+    assert len(kb_apts) > 0
+
+    sortpairs = []
+    names = []
+    for aptidx, apt in enumerate(kb_apts): 
+      names.append(apt['name'])
+      dist = editdist(ent['name'], apt['name'])
+      sortpairs.append((dist, aptidx))
+    sortpairs.sort()
+    names = [f'"{n}"' for n in names]
+    kb_apts = [ kb_apts[sortpairs[0][1]] ]
+
+    print (f'For "{ent["name"]}", "{kb_apts[0]["name"]}" was chosen among [{", ".join(names)}]')
+
+
+  if len(kb_apts) == 0:
+    raise EntryNotFound('cannot find corresponding kb apart')
+  elif len(kb_apts) > 1:
+    pprint(kb_apts)
+
+  assert len(kb_apts) == 1, f"{kb_apts}"
+  return kb_apts[0]
+
 
 def query_kb_apart_by_lawaddrcode(lawaddrcode: int)->List[RowKBApart]:
   kb_col = get_kbliiv_apt_collection()
@@ -352,6 +388,9 @@ def create_indices():
   col.create_index('addrcode_bld_sub')
   col.create_index('lawaddrcode_city')
   col.create_index('lawaddrcode_dong')
+  col.create_index('lawaddrcode_main')
+  col.create_index('lawaddrcode_sub')
+  col.create_index('apttype')
 
   col = get_kbliiv_apt_type_collection()
   col.create_index('id')
