@@ -20,6 +20,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import korea_apartment_price
 from korea_apartment_price.db import ApartmentId, EntryNotFound
+from korea_apartment_price.utils import editdist
 
 
 def date_serial2date(x:int):
@@ -29,9 +30,9 @@ def date_serial2date(x:int):
   return datetime.datetime(year, month, date)
 
 
-def render_graph(apts: List[ApartmentId], date_from=20210101)->Tuple[str, FigureWidget]:
+def render_graph(apts: List[ApartmentId], date_from=20190101)->Tuple[str, FigureWidget]:
   sizes = set(korea_apartment_price.db.query_trades(apt_ids=apts, filters=[korea_apartment_price.db.pick_size], date_from=date_from, include_canceled=True))
-  if len(sizes) == 0: 
+  if len(sizes) == 0:
     sizes = set([apt['size'] for apt in apts])
   favorite_size = apts[0]['size']
   chosen_size = list(sorted([(abs(s-favorite_size), s) for s in sizes]))[0][1]
@@ -75,7 +76,7 @@ def render_graph(apts: List[ApartmentId], date_from=20210101)->Tuple[str, Figure
     try:
       kb_orderbook = sorted(korea_apartment_price.db.query_kb_orderbook(apt, size_from=chosen_size-1, size_to=chosen_size+1, fetched_from=date_from), key=lambda x: x['fetched_at'])
       break
-    except EntryNotFound: 
+    except EntryNotFound:
       print(apt)
       pass
 
@@ -101,6 +102,7 @@ def render_graph(apts: List[ApartmentId], date_from=20210101)->Tuple[str, Figure
     elif od['floor'] is not None and len(od['floor']) > 0:
       curlbl += f'{od["floor"]}'
     if curlbl == '': curlbl='정보없음'
+    curlbl = curlbl.replace('제', '').replace('T', '')
     fetched_price_date_lbls[(date_end, price)].add(curlbl)
 
   fetched_dates = sorted(fetched_date_cnt.keys())
@@ -147,9 +149,19 @@ with open(args.aptlst, 'r') as f:
       addr, name, size = [s.strip() for s in line]
       size = int(size)
     selected=korea_apartment_price.shortcuts.search(addr, name)
+
+    best_editdist = None
+    best_apt = None
     for apt in selected:
       apt['size'] = size
-    apts += selected
+      cur_editdist = editdist(name, apt['name'])
+      if best_apt is None or best_editdist > cur_editdist:
+        best_apt = apt
+        best_editdist = cur_editdist
+    if best_apt is not None:
+      apts.append(best_apt)
+    else:
+      print(f'[!] couldn\'t find apt entries for query=({addr}, {name})')
 
 
 uniq_apts = {}
@@ -209,11 +221,11 @@ with open(args.output, 'w') as f:
   f.write("""<script>
   let grpdata=[];
   let prevActive=false;
-  $(function() { 
+  $(function() {
     let menu = $("#accordion");
     menu.accordion({
       active: false,
-      collapsible: true, 
+      collapsible: true,
       heightStyle: 'content',
       activate: function (e, ui) {
         let active = menu.accordion("option", "active");
@@ -221,7 +233,7 @@ with open(args.output, 'w') as f:
           $("#grp"+prevActive).html('');
         }
 
-        if (active === false) { 
+        if (active === false) {
           $(".grpwrap").html('');
         } else {
           let curgrp = atob(grpdata[active]);
@@ -229,8 +241,8 @@ with open(args.output, 'w') as f:
         }
         prevActive = active;
       }
-    }); 
-  }); 
+    });
+  });
   """)
   for aptidx, grpdata in enumerate(tqdm(grps)):
     f.write(f'grpdata.push("{grpdata}");\n')
