@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import json
 from typing import List, Optional, Tuple
 import datetime
 import re
@@ -16,6 +17,7 @@ ROOT=os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(ROOT)
 
 import plotly
+import plotly.io
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import korea_apartment_price
@@ -41,7 +43,7 @@ def render_graph(apts: List[ApartmentId], date_from=20190101)->Tuple[str, Figure
 
   aptname = re.sub(r'[0-9]+[ ]*단지[ ]*$', '', apts[0]["name"])
 
-  title=f'{apts[0]["address"]} {aptname} (전용 {chosen_size}평)'
+  title=(f'{apts[0]["address"]}', f'{aptname} (전용 {chosen_size}평)')
   fig.update_layout(height = 500, margin=dict(l=10, r=10, b=10, t=10))
   fig.update_yaxes(
     showline=True,
@@ -170,6 +172,9 @@ for apt in apts:
 
 apts = [uniq_apts[k] for k in sorted(uniq_apts.keys())]
 
+######## XXX
+#apts = apts[-3:]
+
 uniq_apts = {}
 for apt in apts:
   aptname = re.sub(r'[0-9]+[ ]*단지[ ]*$', '', apt["name"])
@@ -179,90 +184,94 @@ for apt in apts:
 apt_keys = sorted(uniq_apts.keys())
 
 print('[+] generating report')
-with open(args.output, 'w') as f:
-  datestr = datetime.datetime.now().strftime('%Y-%m-%d')
-  f.write("""<!DOCTYPE html>
+
+for apt_addr, apt_name, apt_size in apt_keys:
+  print(f'{apt_addr} {apt_name} [전용 {apt_size}평]')
+
+data = []
+data_by_addr = {}
+addrlst = []
+
+for aptidx, apt_key in enumerate(tqdm(apt_keys)):
+  apts = uniq_apts[apt_key]
+  (addr, aptname), fig = render_graph(apts)
+
+  cur_chart = json.loads(plotly.io.to_json(fig))
+  if 'data' in cur_chart:
+    for e in cur_chart['data']:
+      e['type'] = 'scattergl'
+  data.append({
+    'addr': addr,
+    'aptname': aptname,
+    'fig': cur_chart,
+  })
+  if not addr in data_by_addr: data_by_addr[addr] = []
+  data_by_addr[addr].append(aptidx)
+addrlst = sorted(list(data_by_addr.keys()))
+
+
+datestr = datetime.datetime.now().strftime('%Y-%m-%d')
+html = f"""<!DOCTYPE html>
 <html lang="kr">
-  <head>
-    <meta charset="utf-8" />
-    <meta http-equiv="x-ua-compatible" content="ie=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-""")
-  f.write(f"<title>{datestr} 아파트 보고서</title>")
-  f.write("""
-    <script type="text/javascript" src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <script type="text/javascript" id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <link rel="stylesheet" href="//code.jquery.com/ui/1.13.0/themes/base/jquery-ui.css">
-    <script src="https://code.jquery.com/jquery-3.6.0.js"></script>
-    <script src="https://code.jquery.com/ui/1.13.0/jquery-ui.js"></script>
-  <style>
-  div { margin:0; padding: 0; }
-  body { margin:0; padding:0; font-family: Candara, Calibri, Segoe, Segoe UI, Optima, Arial, sans-serif; }
-  #accordion { width:calc(100% - 2em); padding: 0.3em; margin:auto; overflow-x: hidden; }
-  .grpwrap { width:calc(100% - 2em); padding: 0em; margin:0; overflow-x: hidden; }
-  </style>
-  </head>
-""")
-  for apt_addr, apt_name, apt_size in apt_keys:
-    print(f'{apt_addr} {apt_name} [전용 {apt_size}평]')
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="x-ua-compatible" content="ie=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{datestr} 아파트 보고서</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+  <script src="https://code.jquery.com/ui/1.13.0/jquery-ui.js"></script>
+  <script type="text/javascript" src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script type="text/javascript" id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="//code.jquery.com/ui/1.13.0/themes/base/jquery-ui.css">
+</head>
+"""
+html += f"""<script>let chartData={json.dumps(data, ensure_ascii=False, separators=(',', ':'))};</script>"""
+html += """<script>
+function updateChart(idx) {
+  let chartdiv = document.getElementById('chart');
+  console.log(idx);
+  Plotly.react(chart, chartData[idx]['fig']['data'],  chartData[idx]['fig']['layout'], {displayModeBar: false});
+}
 
-  titles = []
-  grps = []
-
-  for aptidx, apt_key in enumerate(tqdm(apt_keys)):
-    apts = uniq_apts[apt_key]
-    title, fig = render_graph(apts)
-    titles.append(title)
-    grp_html = fig.to_html(full_html=False, include_plotlyjs=False, include_mathjax=False)
-    grp_html = minify_html.minify(grp_html)
-    grp_base64 = base64.b64encode(grp_html.encode('utf-8')).decode('utf-8')
-    grps.append(grp_base64)
-
-  f.write("""<script>
-  let grpdata=[];
-  let prevActive=false;
-  $(function() {
-    let menu = $("#accordion");
-    menu.accordion({
-      active: false,
-      collapsible: true,
-      heightStyle: 'content',
-      activate: function (e, ui) {
-        let active = menu.accordion("option", "active");
-        if (prevActive !== false) {
-          $("#grp"+prevActive).html('');
-        }
-
-        if (active === false) {
-          $(".grpwrap").html('');
-        } else {
-          let curgrp = atob(grpdata[active]);
-          $("#grp"+active).html(curgrp);
-        }
-        prevActive = active;
-      }
-    });
+$(document).ready(()=>{
+  $('#aptselect').select2();
+  $('#aptselect').on('select2:select', function (e) {
+    let data = e.params.data;
+    updateChart(parseInt(data.id));
   });
-  """)
-  for aptidx, grpdata in enumerate(tqdm(grps)):
-    f.write(f'grpdata.push("{grpdata}");\n')
-  f.write('</script>')
+  let chartdiv = document.getElementById('chart');
+  Plotly.newPlot(chart, chartData[0]['fig']['data'],  chartData[0]['fig']['layout'], {displayModeBar: false});
+});
+</script>
+"""
 
-  f.write(f"""
-  <body>
-    <h1 style="text-align: center;">{datestr} 아파트 보고서</h1>
-    <div id="accordion">
-    """)
-  for aptidx, title in enumerate(tqdm(titles)):
-    f.write(f'<h2>{title}</h2>')
-    f.write(f'<div class="grpwrap" id="grp{aptidx}">')
-    f.write('</div>')
-
-  f.write("""
-  </div>
+options = ""
+for cur_addr in addrlst:
+  options += f'<optgroup label="{cur_addr}">'
+  for cur_data_idx in data_by_addr[cur_addr]:
+    cur_data = data[cur_data_idx]
+    options += f'<option value="{cur_data_idx}" {"selected" if cur_data_idx == 0 else ""}>{cur_data["aptname"]}</option>'
+  options += '</optgroup>'
+html += f"""
+<body>
+  <div class="h-screen m-0 p-0 flex flex-col">
+    <div class="grow-0">
+      <h3 class="text-center font-bold text-lg">{datestr} 아파트 보고서</h3>
+      <div class="m-3">
+        <select class="w-full p-3" id="aptselect" name="aptselect">
+        {options}
+        </select>
+      </div>
+    </div>
+    <div class="grow p-1"><div id="chart"></div></div>
   </body>
-</html>
-""")
+</html>"""
+
+with open(args.output, 'w') as f:
+  f.write(html)
 
 print('[+] done')
 
