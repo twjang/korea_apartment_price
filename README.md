@@ -24,13 +24,14 @@ mongodb가 액세스 가능해야 합니다.
 * "오픈API 상세" 페이지에서 "활용신청" 버튼을 클릭합니다.
 * 일단 개발계정 활용 신청을 합니다. 연구 목적으로 적당히 기입하세요.
 * 운용계정 활용 신청을 해서 운용계정으로 업그레이드 합니다. 마찬가지로 적당히 내용을 채워주면 자동 승인됩니다.
+* 마찬가지로 "국토교통부_아파트 전월세 자료" API의 운용계정 키를 발급 받습니다.
 
 ### data/config.json 편집
 * data/config.example.json을 data/config.json 에 복사해줍니다.
-* 이전 과정에서 받은 API Key를 config.json의 API_KEY 필드에 적어줍니다.
+* 이전 과정에서 받은 실거래 자료 API Key를 config.json의 TRADES_API_KEY 필드에 적어줍니다. 전월세 자료는 RENTS_API_KEY에 적습니다.
 * mongodb connection uri를 "MONGO_URI" 필드에 적어줍니다. 
 
-### scripts/{orderbook, trades}_region_code.csv 편집
+### scripts/{orderbook, trades, rents}_region_code.csv 편집
 * scripts/region_code.tmpl.csv 에는 전국의 구 목록과 법정코드가 나와있습니다.
 * scripts/ 내의 스크립트들은 scripts/*_region_code.csv 에 들어있는 법정동 대상으로 크롤링합니다.
 * scripts/download_trades.py는 scripts/trades_region_code.csv의 법정동 목록에 대해서만 크롤링합니다. 현재 서울, 경기도, 세종시, 인천시만 들어있는데, 그 외의 지역을 추가할 때에는 해당 지역을 region_code.tmpl.csv 에서 복사해서 추가하면 됩니다.
@@ -40,10 +41,18 @@ mongodb가 액세스 가능해야 합니다.
 ## 분석할 데이터를 db에 받아오기
 ### 국토 교통부 실거래 정보 다운로드
 * ./scripts/download_trades.py를 실행시켜서 다운로드 받으세요. 중간에 연결이 끊어져서 스크립트가 멈추기도 하는데, 이럴 때 스크립트를 다시 실행시켜주면 지금까지 받은 것들에 이어서 받기 시작합니다.
-* ./scripts/region_code.csv 에는 ./scripts/download_trades.py 를 통해 다운받을 지역의 법정동코드의 앞 5자리들의 목록이 있습니다. 기본적으로는 서울시, 경기도, 인천시의 코드들이 들어있습니다.
+* ./scripts/trades_region_code.csv 에는 ./scripts/download_trades.py 를 통해 다운받을 지역의 법정동코드의 앞 5자리들의 목록이 있습니다. 기본적으로는 서울시, 경기도, 인천시의 코드들이 들어있습니다.
   * 법정동코드 앞 5자리는 국토교통부 실거래 API의 argument로 들어갑니다. 전체 법정동코드는 https://www.code.go.kr/stdcode/regCodeL.do 에서 확인하세요.  
 * ./download_trades.py가 실행되면, API를 통해서 받은 내용들이 json 형태로 serialize되어 ./data/trades 폴더에 저장됩니다. 검색을 용이하게 하기 위해 mongodb에도 저장합니다.
 * ./data/trades 에서 파일을 지운 뒤 ./scripts/download_trades.py를 실행하면, 지워진 파일에 해당하는 db 레코드도 삭제된 뒤 다시 받아집니다. 가장 최근 월 정보를 새로 받고 싶을 때에는 이 방법으로 실거래 데이터를 추가 다운로드 받을 수 있습니다.
+
+### 국토 교통부 전월세 정보 다운로드
+* ./scripts/download_rents.py를 실행시켜서 다운로드 받으세요. 중간에 연결이 끊어져서 스크립트가 멈추기도 하는데, 이럴 때 스크립트를 다시 실행시켜주면 지금까지 받은 것들에 이어서 받기 시작합니다.
+* ./scripts/rents_region_code.csv 에는 기본적으로는 서울시, 경기도, 인천시의 코드들이 들어있습니다.
+  * 법정동코드 앞 5자리는 국토교통부 실거래 API의 argument로 들어갑니다. 전체 법정동코드는 https://www.code.go.kr/stdcode/regCodeL.do 에서 확인하세요.  
+* ./download_rents.py가 실행되면, API를 통해서 받은 내용들이 json 형태로 serialize되어 ./data/rents 폴더에 저장됩니다. 검색을 용이하게 하기 위해 mongodb에도 저장합니다.
+* ./data/rents 에서 파일을 지운 뒤 ./scripts/download_rents.py를 실행하면, 지워진 파일에 해당하는 db 레코드도 삭제된 뒤 다시 받아집니다. 가장 최근 월 정보를 새로 받고 싶을 때에는 이 방법으로 실거래 데이터를 추가 다운로드 받을 수 있습니다.
+
 
 ### 건물 주소 및 좌표 다운로드
 * ./scripts/download_geocode.py를 실행시켜서 다운로드 받으세요.

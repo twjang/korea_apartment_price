@@ -12,7 +12,6 @@ import time
 import json
 
 import korea_apartment_price
-from korea_apartment_price.utils.converter import safe_date_serial
 from typing import List, Tuple
 
 
@@ -21,54 +20,47 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
-from korea_apartment_price.path import TRADE_DATA_ROOT, SCRIPT_ROOT
+from korea_apartment_price.path import RENT_DATA_ROOT, SCRIPT_ROOT
 from korea_apartment_price.config import get_cfg
-from korea_apartment_price.db import RowTrade
+from korea_apartment_price.db import RowRent
 from korea_apartment_price.utils import safe_int, safe_float
 
 
-region_codes = pd.read_csv(os.path.join(SCRIPT_ROOT, 'trades_region_code.csv'))
+region_codes = pd.read_csv(os.path.join(SCRIPT_ROOT, 'rents_region_code.csv'))
 
-class TradeDownloader:
+class RentDownloader:
   def __init__(self, timeout:float=20.0):
-    self.api_key = get_cfg()['TRADES_API_KEY']
+    self.api_key = get_cfg()['RENTS_API_KEY']
     self.timeout = timeout
 
-  def get(self, ymd: int, region_code: int)->List[RowTrade]:
+  def get(self, ymd: int, region_code: int)->List[RowRent]:
     num_rows = 1000
     res = []
     keylist = [
-      ('일련번호', 'serial'),
-      ('거래금액', 'price'),
+      ('보증금액', 'price_deposit'),
+      ('월세금액', 'price_monthly'),
       ('건축년도', 'created_at'),
-      ('도로명', 'addr_road'),
-      ('도로명건물본번호코드', 'addrcode_bld'),
-      ('도로명건물부번호코드','addrcode_bld_sub'),
-      ('도로명시군구코드', 'addrcode_city'),
-      ('도로명일련번호코드', 'addrcode_serial'),
-      ('도로명코드', 'addrcode'),
+      ('갱신요구권사용', 'rent_extended'),
       ('법정동', 'lawaddr_dong'),
-      ('법정동본번코드', 'lawaddrcode_main'),
-      ('법정동부번코드', 'lawaddrcode_sub'),
-      ('법정동시군구코드', 'lawaddrcode_city'),
-      ('법정동읍면동코드', 'lawaddrcode_dong'),
-      ('법정동지번코드', 'lawaddrcode_jibun'),
       ('아파트', 'name'),
-      ('매매일', 'date_serial'),
+      ('계약구분', 'contract_type'),
+      ('계약기간', 'contract_duration'),
+      ('임대일', 'date_serial'),
       ('년', 'year'),
       ('월', 'month'),
       ('일', 'date'),
       ('전용면적', 'size'),
+      ('종전계약보증금', 'prev_deposit'),
+      ('종전계약월세', 'prev_monthly'),
       ('지번', 'jibun'),
       ('지역코드', 'location_code'),
       ('층', 'floor'),
-      ('해제여부', 'is_canceled'),
-      ('해제사유발생일', 'canceled_date'),
     ]
 
     cur_page = 1
     total_cnt = None
 
+    ymd = 202205
     while total_cnt is None or total_cnt > len(res):
       params = {
           'LAWD_CD': region_code,
@@ -78,7 +70,7 @@ class TradeDownloader:
           'pageNo': cur_page,
       }
 
-      url = f'http://openapi.molit.go.kr/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTradeDev'
+      url = f'http://openapi.molit.go.kr:8081/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptRent'
       resp = requests.get(url, params=params, timeout=self.timeout)
       soup = BeautifulSoup(resp.content, 'lxml-xml')
       items = soup.findAll('item')
@@ -95,25 +87,15 @@ class TradeDownloader:
           elem = v.find(key)
           item[key] = elem.text.strip() if elem is not None else None
 
-        item['매매일'] = safe_int(item['년'], 0) * 10000 + safe_int(item['월'], 0) * 100 + safe_int(item['일'], 0)
-        item['거래금액'] = safe_int(item['거래금액'].replace(',', ''))
+        item['임대일'] = safe_int(item['년'], 0) * 10000 + safe_int(item['월'], 0) * 100 + safe_int(item['일'], 0)
+        for pricekey in ['보증금액', '월세금액', '종전계약보증금', '종전계약월세']:
+          item[pricekey] = safe_int(item[pricekey].replace(',', ''))
         item['전용면적'] = safe_float(item['전용면적'])
         item['층'] = safe_int(item['층'].strip())
         item['건축년도'] = safe_int(item['건축년도'])
-        item['해제여부'] = item.get('해제여부', '') != ''
-        item['해제사유발생일'] = safe_date_serial(item.get('해제사유발생일', None))
+        item['갱신요구권사용'] = item.get('갱신요구권사용', '') != ''
 
         for intkey, _ in [
-          ('도로명건물본번호코드', 'addrcode_bld'),
-          ('도로명건물부번호코드', 'addrcode_bld_sub'),
-          ('도로명시군구코드', 'addrcode_city'),
-          ('도로명일련번호코드', 'addrcode_serial'),
-          ('도로명코드', 'addrcode'),
-          ('법정동본번코드', 'lawaddrcode_main'),
-          ('법정동부번코드', 'lawaddrcode_sub'),
-          ('법정동시군구코드', 'lawaddrcode_city'),
-          ('법정동읍면동코드', 'lawaddrcode_dong'),
-          ('법정동지번코드', 'lawaddrcode_jibun'),
           ('지역코드', 'location_code'),
           ('년', 'year'),
           ('월', 'month'),
@@ -132,12 +114,12 @@ class TradeDownloader:
     return res
 
 
-def list_trade_entries_in_db()->List[Tuple[int, int, int]]:
-  col = korea_apartment_price.db.get_trades_collection()
+def list_rent_entries_in_db()->List[Tuple[int, int, int]]:
+  col = korea_apartment_price.db.get_rents_collection()
   entries = col.aggregate([{
     "$group": {
       "_id": {
-        "lawaddrcode_city": "$lawaddrcode_city",
+        "location_code": "$location_code",
         "year": "$year",
         "month": "$month",
       },
@@ -148,59 +130,59 @@ def list_trade_entries_in_db()->List[Tuple[int, int, int]]:
   for entry in entries:
     year = safe_int(entry['_id']['year'])
     month = safe_int(entry['_id']['month'])
-    lawaddrcode_city = safe_int(entry['_id']['lawaddrcode_city'])
-    ymregion = (year, month, lawaddrcode_city)
+    location_code = safe_int(entry['_id']['location_code'])
+    ymregion = (year, month, location_code)
     if entry['count'] > 0:
       res.append(ymregion)
   return res
 
 
 
-def list_trade_entries_in_files()->List[Tuple[int, int, int]]:
+def list_rent_entries_in_files()->List[Tuple[int, int, int]]:
   res = []
   regex = re.compile(r'^([0-9]{4})([0-9]{2})-([0-9]{5}).json$')
 
-  for fname in os.listdir(TRADE_DATA_ROOT):
+  for fname in os.listdir(RENT_DATA_ROOT):
     gp = regex.match(fname)
     if gp is None: continue
     year = safe_int(gp.group(1))
     month = safe_int(gp.group(2))
-    lawaddrcode_city = safe_int(gp.group(3))
-    res.append((year, month, lawaddrcode_city))
+    location_code = safe_int(gp.group(3))
+    res.append((year, month, location_code))
   return res
 
 
-def remove_trade_entries_from_db(ymregions: List[Tuple[int, int, int]]):
-  col = korea_apartment_price.db.get_trades_collection()
+def remove_rent_entries_from_db(ymregions: List[Tuple[int, int, int]]):
+  col = korea_apartment_price.db.get_rents_collection()
 
-  for year, month, lawaddrcode_city in tqdm(ymregions):
+  for year, month, location_code in tqdm(ymregions):
     col.delete_many({
       '$and': [
         {'$expr': { '$eq': [ "$year", year ] }},
         {'$expr': { '$eq': [ "$month", month ] }},
-        {'$expr': { '$eq': [ "$lawaddrcode_city", lawaddrcode_city ] }},
+        {'$expr': { '$eq': [ "$location_code", location_code ] }},
       ]
     })
 
 
 
 def fetch_and_insert(arg: Tuple[int, int, int]):
-  year, month, region_code = arg
+  year, month, location_code = arg
   ymd_code = year * 100 + month
 
-  fname = f'{year:04d}{month:02d}-{region_code}.json'
-  fpath = os.path.join(TRADE_DATA_ROOT, fname)
+  fname = f'{year:04d}{month:02d}-{location_code}.json'
+  fpath = os.path.join(RENT_DATA_ROOT, fname)
 
   if os.path.exists(fpath):
     return
 
-  os.makedirs(TRADE_DATA_ROOT, exist_ok=True)
-  dn = TradeDownloader()
+  os.makedirs(RENT_DATA_ROOT, exist_ok=True)
+  dn = RentDownloader()
   data = None
 
   while data is None:
     try:
-      data = dn.get(ymd_code, region_code)
+      data = dn.get(ymd_code, location_code)
     except requests.exceptions.Timeout:
       pass
 
@@ -208,13 +190,12 @@ def fetch_and_insert(arg: Tuple[int, int, int]):
     with open(fpath, 'w') as f:
       content = json.dumps(data, ensure_ascii=False)
       f.write(content)
-    col = korea_apartment_price.db.get_trades_collection()
+    col = korea_apartment_price.db.get_rents_collection()
     col.insert_many(data)
   else:
     print(f'Warning: failed to fetch {fname}')
 
   time.sleep(0.1)
-
 
 
 if __name__ == '__main__':
@@ -229,15 +210,15 @@ if __name__ == '__main__':
 
   korea_apartment_price.db.create_indices()
 
-  print('[*] checking db/file trade entries')
-  entries_in_db = set(list_trade_entries_in_db())
-  entries_in_files = set(list_trade_entries_in_files())
+  print('[*] checking db/file rent entries')
+  entries_in_db = set(list_rent_entries_in_db())
+  entries_in_files = set(list_rent_entries_in_files())
 
   to_be_removed_from_db = list(entries_in_db.difference(entries_in_files))
   print(f'[*] removing {len(to_be_removed_from_db)} entries from db not presenting in filesystem')
-  remove_trade_entries_from_db(to_be_removed_from_db)
+  remove_rent_entries_from_db(to_be_removed_from_db)
 
-  print('[*] fetching trade entries and save them to db/fs')
+  print('[*] fetching rent entries and save them to db/fs')
   entries_to_fetch = list(set(entries_to_fetch).difference(entries_in_files))
   entries_to_fetch.sort()
 

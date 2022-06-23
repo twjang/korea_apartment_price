@@ -1,5 +1,6 @@
 __pycache__/
 data/trades/*.json
+data/rents/*.json
 data/config.json
 *.pkl
 .vscode

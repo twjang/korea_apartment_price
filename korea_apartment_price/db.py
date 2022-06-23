@@ -29,6 +29,7 @@ __all__ = (
 _conn: Optional[MongoClient] = None
 _db: Optional[Database]  = None
 
+_rents_collection: Optional[Collection] = None
 _trades_collection: Optional[Collection] = None
 _geocodes_collection: Optional[Collection] = None
 _kbliiv_apt_collection: Optional[Collection] = None
@@ -59,6 +60,12 @@ def get_trades_collection()->Collection:
   if _trades_collection is None:
     _trades_collection = get_db()['trades']
   return _trades_collection
+
+def get_rents_collection()->Collection:
+  global _rents_collection
+  if _rents_collection is None:
+    _rents_collection = get_db()['rents']
+  return _rents_collection
 
 
 def pick_size(ent)->int:
@@ -94,6 +101,48 @@ class RowTrade(TypedDict):
   floor: int             # 층
   is_canceled: bool      # 취소여부
   canceled_date: int     # 취소일
+
+"""
+<보증금액>75,000</보증금액>
+<월세금액>0</월세금액>
+<갱신요구권사용 />
+<건축년도>2008</건축년도>
+<법정동>사직동</법정동>
+<아파트>광화문스페이스본(101동~105동)</아파트>
+<계약구분 />
+<계약기간 />
+<년>2015</년>
+<월>1</월>
+<일>9</일>
+<전용면적>158.99</전용면적>
+<종전계약보증금 />
+<종전계약월세 />
+<지번>9</지번>
+<지역코드>11110</지역코드>
+<층>7</층>
+"""
+class RowRent(TypedDict):
+  _id: Any
+  price_deposit: int
+  price_monthly: int
+  rent_extended: bool
+  created_at: int
+  lawaddr_dong: str
+  name: str
+  contract_type: str
+  contract_duration: str
+  date_serial: int
+  year: int
+  month: int
+  date: int
+  size: float
+  prev_deposit: int
+  prev_monthly: int
+  jibun: str
+  location_code: int
+  floor: int
+
+
 
 class ApartmentId(TypedDict):
   address: str   # 주소
@@ -233,7 +282,6 @@ class RowKBOrderbook(TypedDict):
   trade_type: TradeType                   # 매물거래구분
   detail: Any                             # 세부사항
 
-
 class EntryNotFound(Exception): pass
 
 
@@ -362,6 +410,16 @@ def query_kb_orderbook(apt_id: ApartmentId, size_from: Optional[int]=None, size_
 
 
 def create_indices():
+  col = get_rents_collection()
+  col.create_index('location_code')
+  col.create_index('lawaddr_dong')
+  col.create_index('name')
+  col.create_index('date_serial')
+  col.create_index('size')
+  col.create_index('year')
+  col.create_index('month')
+  col.create_index('date')
+
   col = get_trades_collection()
   col.create_index('lawaddrcode_city')
   col.create_index('lawaddrcode_dong')

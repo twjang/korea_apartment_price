@@ -232,7 +232,6 @@ html += f"""<script>let chartData={json.dumps(data, ensure_ascii=False, separato
 html += """<script>
 function updateChart(idx) {
   let chartdiv = document.getElementById('chart');
-  console.log(idx);
   Plotly.react(chart, chartData[idx]['fig']['data'],  chartData[idx]['fig']['layout'], {displayModeBar: false});
 }
 
