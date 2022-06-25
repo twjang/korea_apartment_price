@@ -1,3 +1,5 @@
+db.sqlite
+
 __pycache__/
 data/trades/*.json
 data/rents/*.json

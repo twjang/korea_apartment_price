@@ -3,10 +3,11 @@ from typing import Dict, List, Optional, TypedDict, Union
 
 import pickle
 from tqdm import tqdm
+from korea_apartment_price import region_code
 
 from korea_apartment_price.utils import Finder
 from korea_apartment_price.path import CACHE_ROOT
-from korea_apartment_price.db import get_trades_collection
+from korea_apartment_price.db import get_rents_collection, get_trades_collection
 
 
 __all__ = ('search', 'reload_apartment_names')
@@ -57,6 +58,37 @@ def reload_apartment_names():
       'addrcode_bld': ent['addrcode_bld'],
       'addrcode_bld_sub': ent['addrcode_bld_sub'],
     }
+  
+  for key in tqdm(entries.keys()):
+    lawaddrcode, kwd, name = key
+    ent = entries[key]
+    _apart_finder.register([lawaddrcode] + _make_ngrams(kwd, 2), ent)
+
+
+  col = get_rents_collection()
+
+  entries = {}
+  total_cnt = col.count_documents(filter={})
+  for ent in tqdm(col.find(), total=total_cnt):
+    region_ents = region_code.search([str(ent['location_code']), ent['lawaddr_dong']])
+    region_ent = None
+    if len(region_ents) > 0: region_ent = region_ents[0]
+    if region_ent is None: continue
+    lawaddrcode = region_ent['lawaddrcode']
+
+    name = ent['name']
+    kwd = name.replace(' ', '').split('(', 1)[0]
+    key = (lawaddrcode, kwd, name)
+
+    if not key in entries:
+      entries[key] = {
+        'lawaddrcode': lawaddrcode,
+        'name': name,
+        'addrcode_city': ent['location_code'],
+        'addrcode_serial': 0,
+        'addrcode_bld': 0,
+        'addrcode_bld_sub': 0,
+      }
   
   for key in tqdm(entries.keys()):
     lawaddrcode, kwd, name = key

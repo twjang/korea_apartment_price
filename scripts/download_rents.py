@@ -60,7 +60,6 @@ class RentDownloader:
     cur_page = 1
     total_cnt = None
 
-    ymd = 202205
     while total_cnt is None or total_cnt > len(res):
       params = {
           'LAWD_CD': region_code,
@@ -91,7 +90,7 @@ class RentDownloader:
         for pricekey in ['보증금액', '월세금액', '종전계약보증금', '종전계약월세']:
           item[pricekey] = safe_int(item[pricekey].replace(',', ''))
         item['전용면적'] = safe_float(item['전용면적'])
-        item['층'] = safe_int(item['층'].strip())
+        item['층'] = safe_int(item['층'])
         item['건축년도'] = safe_int(item['건축년도'])
         item['갱신요구권사용'] = item.get('갱신요구권사용', '') != ''
 
@@ -173,29 +172,31 @@ def fetch_and_insert(arg: Tuple[int, int, int]):
   fname = f'{year:04d}{month:02d}-{location_code}.json'
   fpath = os.path.join(RENT_DATA_ROOT, fname)
 
-  if os.path.exists(fpath):
-    return
-
   os.makedirs(RENT_DATA_ROOT, exist_ok=True)
   dn = RentDownloader()
   data = None
 
-  while data is None:
-    try:
-      data = dn.get(ymd_code, location_code)
-    except requests.exceptions.Timeout:
-      pass
+  if not os.path.exists(fpath):
+    while data is None:
+      try:
+        time.sleep(0.1)
+        data = dn.get(ymd_code, location_code)
+      except requests.exceptions.Timeout:
+        pass
 
-  if len(data) > 0:
     with open(fpath, 'w') as f:
       content = json.dumps(data, ensure_ascii=False)
       f.write(content)
+  else:
+    with open(fpath, 'r') as f:
+      data = json.loads(f.read())
+
+  if len(data) > 0:
     col = korea_apartment_price.db.get_rents_collection()
     col.insert_many(data)
   else:
     print(f'Warning: failed to fetch {fname}')
 
-  time.sleep(0.1)
 
 
 if __name__ == '__main__':
@@ -219,7 +220,7 @@ if __name__ == '__main__':
   remove_rent_entries_from_db(to_be_removed_from_db)
 
   print('[*] fetching rent entries and save them to db/fs')
-  entries_to_fetch = list(set(entries_to_fetch).difference(entries_in_files))
+  entries_to_fetch = list(set(entries_to_fetch).difference(entries_in_db))
   entries_to_fetch.sort()
 
   for jobidx, job in enumerate(tqdm(entries_to_fetch)):

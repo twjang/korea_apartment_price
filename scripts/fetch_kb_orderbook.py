@@ -10,15 +10,9 @@ sys.path.append(ROOT)
 
 from tqdm import tqdm
 import time
-import json
-
-import korea_apartment_price
-from typing import Callable, List, Dict, Any, Optional, Tuple, TypeVar
 
 import argparse
 import pandas as pd
-import requests
-from bs4 import BeautifulSoup
 
 from korea_apartment_price.path import SCRIPT_ROOT
 from korea_apartment_price import db 

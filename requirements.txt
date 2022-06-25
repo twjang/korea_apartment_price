@@ -5,3 +5,7 @@ jamo
 pyproj
 py7zr
 minify-html
+fastapi
+uvicorn
+peewee
+pyjwt

@@ -1,5 +1,13 @@
 {
   "TRADES_API_KEY": "[API KEY HERE]",
   "RENTS_API_KEY": "[API KEY HERE]",
-  "MONGO_URI": "mongodb://localhost/korea_apartment_price"
+  "MONGO_URI": "mongodb://localhost/korea_apartment_price",
+  "WEBAPP": {
+    "DB_TYPE": "sqlite or mysql",
+    "DB_NAME": "database name here",
+    "DB_ARGS": {},
+    "SALT": "any salt here",
+    "ADMIN_PASSWORD": "admin password here",
+    "JWT_SECRET": "jwt key secret here"
+  }
 }

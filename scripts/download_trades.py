@@ -191,29 +191,31 @@ def fetch_and_insert(arg: Tuple[int, int, int]):
   fname = f'{year:04d}{month:02d}-{region_code}.json'
   fpath = os.path.join(TRADE_DATA_ROOT, fname)
 
-  if os.path.exists(fpath):
-    return
-
   os.makedirs(TRADE_DATA_ROOT, exist_ok=True)
   dn = TradeDownloader()
   data = None
 
-  while data is None:
-    try:
-      data = dn.get(ymd_code, region_code)
-    except requests.exceptions.Timeout:
-      pass
+  if not os.path.exists(fpath):
+    while data is None:
+      try:
+        time.sleep(0.1)
+        data = dn.get(ymd_code, region_code)
+      except requests.exceptions.Timeout:
+        pass
 
-  if len(data) > 0:
     with open(fpath, 'w') as f:
       content = json.dumps(data, ensure_ascii=False)
       f.write(content)
+  else:
+    with open(fpath, 'r') as f:
+      data = json.loads(f.read())
+
+  if len(data) > 0:
     col = korea_apartment_price.db.get_trades_collection()
     col.insert_many(data)
   else:
     print(f'Warning: failed to fetch {fname}')
 
-  time.sleep(0.1)
 
 
 
@@ -238,7 +240,7 @@ if __name__ == '__main__':
   remove_trade_entries_from_db(to_be_removed_from_db)
 
   print('[*] fetching trade entries and save them to db/fs')
-  entries_to_fetch = list(set(entries_to_fetch).difference(entries_in_files))
+  entries_to_fetch = list(set(entries_to_fetch).difference(entries_in_db))
   entries_to_fetch.sort()
 
   for jobidx, job in enumerate(tqdm(entries_to_fetch)):

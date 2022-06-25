@@ -11,6 +11,7 @@ from pymongo.collection import Collection
 from korea_apartment_price.config import get_cfg
 from korea_apartment_price.utils import editdist
 from korea_apartment_price.utils.converter import safe_int
+from korea_apartment_price import region_code
 
 __all__ = (
   'get_db',
@@ -149,7 +150,44 @@ class ApartmentId(TypedDict):
   lawaddrcode: str # 법정동코드 (시 + 동)
   name: str    # 아파트 이름
 
-def query_trades(
+def query_sizes(
+  apt_id: ApartmentId
+):
+  cond = {
+    'lawaddrcode_city': int(str(apt_id['lawaddrcode'])[:5]),
+    'lawaddrcode_dong': int(str(apt_id['lawaddrcode'])[5:]),
+    'name': apt_id['name']
+  }
+
+  col = get_trades_collection()
+  cursor = col.aggregate([
+    {'$match':cond }, 
+    {'$group': {'_id':{ 'size': '$size'}}}, 
+  ])
+
+  res = set()
+  for ent in cursor:
+    res.add(int(ent['_id']['size'] / 3.3 + 0.5))
+
+
+  cond = {
+    'location_code': int(str(apt_id['lawaddrcode'])[:5]),
+    'name': apt_id['name']
+  }
+
+  col = get_rents_collection()
+  cursor = col.aggregate([
+    {'$match':cond }, 
+    {'$group': {'_id':{ 'size': '$size'}}}, 
+  ])
+
+  for ent in cursor:
+    res.add(int(ent['_id']['size'] / 3.3 + 0.5))
+  return sorted(list(res))
+
+
+
+def query_rents(
   apt_ids: Optional[List[ApartmentId]]=None,
   lawaddrcode: Optional[str]=None,
   names: Optional[Union[str, List[str]]]=None,
@@ -158,8 +196,28 @@ def query_trades(
   size_from:Optional[int]=None,
   size_to:Optional[int]=None,
   filters:Optional[List[Callable]]=None,
-  include_canceled:bool = False
-)->List[Dict[str, Any]]:
+)->Union[List[RowRent], List[Any]]:
+
+  def _convert_lawaddrcode_for_rent(lawaddrcode:str)->Optional[Dict[str, str]]:
+    lawaddrcode_city = lawaddrcode[:5]
+    lawaddr_city = None
+    lawaddr_dong = None
+
+    city_entry = region_code.search([lawaddrcode_city + '00000'])
+    if len(city_entry) > 0:
+      lawaddr_city = city_entry[0]['address']
+
+    dong_entry = region_code.search([lawaddrcode])
+    if len(dong_entry) > 0 and lawaddr_city is not None:
+      lawaddr_dong = dong_entry[0]['address'].replace(lawaddr_city, '').strip()
+
+    if lawaddr_dong is not None:
+      return {
+        'location_code': int(lawaddrcode_city),
+        'lawaddr_dong': lawaddr_dong
+      }
+    return None
+
 
   if apt_ids is None and (lawaddrcode is None or names is None):
     raise ValueError('Either apt_infos or (addrcode, names) should be given')
@@ -172,8 +230,67 @@ def query_trades(
   if len(date_cond) > 0: cond['date_serial'] = date_cond
 
   size_cond = {}
-  if size_from is not None: size_cond['$gte'] = size_from * 3.3 - 3.3
-  if size_to is not None: size_cond['$lte'] = size_to * 3.3 + 3.3
+  if size_from is not None: size_cond['$gte'] = size_from * 3.3 - 1.6
+  if size_to is not None: size_cond['$lte'] = size_to * 3.3 + 1.6
+  if len(size_cond) > 0: cond['size'] = size_cond
+
+  if apt_ids is None:
+    apt_ids = []
+    if isinstance(names, str):
+      names = [names]
+
+    for name in names:
+      apt_ids.append({
+        'lawaddrcode': lawaddrcode,
+        'name': name
+      })
+
+  cond_apt_info = []
+  for e in apt_ids:
+    base_ent = _convert_lawaddrcode_for_rent(e['lawaddrcode'])
+    new_ent = base_ent.copy()
+    new_ent['name'] = e['name']
+    cond_apt_info.append(new_ent)
+
+  cond['$or'] = cond_apt_info
+
+  col = get_rents_collection()
+  cursor = col.find({'$query':cond, '$orderby':{ 'date_serial': 1 }})
+
+  res = []
+  for ent in cursor:
+    if filters is not None:
+      for filter in filters: ent = filter(ent)
+    res.append(ent)
+  return res
+
+
+
+def query_trades(
+  apt_ids: Optional[List[ApartmentId]]=None,
+  lawaddrcode: Optional[str]=None,
+  names: Optional[Union[str, List[str]]]=None,
+  date_from:Optional[int]=None,
+  date_to:Optional[int]=None,
+  size_from:Optional[int]=None,
+  size_to:Optional[int]=None,
+  filters:Optional[List[Callable]]=None,
+  include_canceled:bool = False
+)->Union[List[RowTrade], List[Any]]:
+
+  if apt_ids is None and (lawaddrcode is None or names is None):
+    raise ValueError('Either apt_infos or (addrcode, names) should be given')
+
+  cond = {}
+
+  date_cond = {}
+  if date_from is not None: date_cond['$gte'] = date_from
+  if date_to is not None: date_cond['$lte'] = date_to
+  if len(date_cond) > 0: cond['date_serial'] = date_cond
+
+  size_cond = {}
+  if size_from is not None: size_cond['$gte'] = size_from * 3.3 - 1.6
+  if size_to is not None: size_cond['$lte'] = size_to * 3.3 + 1.6
   if len(size_cond) > 0: cond['size'] = size_cond
 
   if apt_ids is None:
@@ -306,29 +423,32 @@ def get_kbliiv_apt_orderbook_collection()->Collection:
 def query_kb_apart(apt_id: ApartmentId)->RowKBApart:
   trade_col = get_trades_collection()
   kb_col = get_kbliiv_apt_collection()
+  lawaddrcode_city = safe_int(apt_id['lawaddrcode'][:5])
+  lawaddrcode_dong = safe_int(apt_id['lawaddrcode'][5:])
+  apt_name = apt_id['name']
   ent = trade_col.find_one({
-    'lawaddrcode_city': safe_int(apt_id['lawaddrcode'][:5]),
-    'lawaddrcode_dong': safe_int(apt_id['lawaddrcode'][5:]),
-    'name': apt_id['name']
+    'lawaddrcode_city':lawaddrcode_city, 
+    'lawaddrcode_dong': lawaddrcode_dong,
+    'name': apt_name
   })
 
-  # search based on address
-  kb_apts: RowKBApart = kb_col.find({
-    'lawaddrcode_city': ent['lawaddrcode_city'],
-    'lawaddrcode_dong': ent['lawaddrcode_dong'],
-    'lawaddrcode_main': ent['lawaddrcode_main'],
-    'lawaddrcode_sub': ent['lawaddrcode_sub'],
-    'apttype': 1,
-  })
+  kb_apts = []
+  if ent is not None:
+    # search based on address
+    kb_apts: RowKBApart = kb_col.find({
+      'lawaddrcode_city': lawaddrcode_city,
+      'lawaddrcode_dong': lawaddrcode_dong,
+      'lawaddrcode_main': ent['lawaddrcode_main'],
+      'lawaddrcode_sub': ent['lawaddrcode_sub'],
+    })
 
-  kb_apts = list(kb_apts)
+    kb_apts = list(kb_apts)
 
   # fallback to best matching name
   if len(kb_apts) == 0:
     kb_apts: RowKBApart = kb_col.find({
-      'lawaddrcode_city': ent['lawaddrcode_city'],
-      'lawaddrcode_dong': ent['lawaddrcode_dong'],
-      'apttype': 1,
+      'lawaddrcode_city': lawaddrcode_city,
+      'lawaddrcode_dong': lawaddrcode_dong,
     })
     kb_apts = list(kb_apts)
     assert len(kb_apts) > 0
@@ -337,13 +457,13 @@ def query_kb_apart(apt_id: ApartmentId)->RowKBApart:
     names = []
     for aptidx, apt in enumerate(kb_apts): 
       names.append(apt['name'])
-      dist = editdist(ent['name'], apt['name'])
+      dist = editdist(apt_name, apt['name'])
       sortpairs.append((dist, aptidx))
     sortpairs.sort()
     names = [f'"{n}"' for n in names]
     kb_apts = [ kb_apts[sortpairs[0][1]] ]
 
-    print (f'For "{ent["name"]}", "{kb_apts[0]["name"]}" was chosen among [{", ".join(names)}]')
+    print (f'For "{apt_name}", "{kb_apts[0]["name"]}" was chosen among [{", ".join(names)}]')
 
 
   if len(kb_apts) == 0:
@@ -351,7 +471,6 @@ def query_kb_apart(apt_id: ApartmentId)->RowKBApart:
   elif len(kb_apts) > 1:
     pprint(kb_apts)
 
-  assert len(kb_apts) == 1, f"{kb_apts}"
   return kb_apts[0]
 
 
