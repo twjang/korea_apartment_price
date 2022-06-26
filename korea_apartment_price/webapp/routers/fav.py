@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 import korea_apartment_price
 from korea_apartment_price.db import ApartmentId
-from korea_apartment_price.webapp import model
+from korea_apartment_price.webapp import models
 from korea_apartment_price.webapp.deps import  get_current_real_user
 
 router = APIRouter(
@@ -14,8 +14,8 @@ router = APIRouter(
 )
 
 @router.get('/')
-def fav_list(u: model.User = Depends(get_current_real_user)):
-  fav = model.Favorite.list(u)
+def fav_list(u: models.User = Depends(get_current_real_user)):
+  fav = models.Favorite.list(u)
   return {
     'status': 'ok',
     'result': fav
@@ -28,7 +28,7 @@ class FavoriteAddReq(BaseModel):
   size: int
 
 @router.post('/')
-def fav_add(f: FavoriteAddReq, u: model.User = Depends(get_current_real_user)):
+def fav_add(f: FavoriteAddReq, u: models.User = Depends(get_current_real_user)):
   is_valid = False
   try:
     apt_id: ApartmentId = {
@@ -46,17 +46,17 @@ def fav_add(f: FavoriteAddReq, u: model.User = Depends(get_current_real_user)):
   if not is_valid:
     raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='invalid inputs')
 
-  fav = model.Favorite(user=u, lawaddrcode=f.lawaddrcode, address=f.address, name=f.name, size=f.size)
+  fav = models.Favorite(user=u, lawaddrcode=f.lawaddrcode, address=f.address, name=f.name, size=f.size)
   fav.save()
   return {
     'status': 'ok'
   }
 
 @router.get('/{fid}')
-def get_detail_of_favorite(fid:int, u: model.User = Depends(get_current_real_user)):
+def get_detail_of_favorite(fid:int, u: models.User = Depends(get_current_real_user)):
   try:
-    fav = model.Favorite.get(id=fid)
-  except model.Favorite.DoesNotExist:
+    fav = models.Favorite.get(id=fid)
+  except models.Favorite.DoesNotExist:
     raise HTTPException(status.HTTP_404_NOT_FOUND)
   if fav.user.id != u.id:
     raise HTTPException(status.HTTP_404_NOT_FOUND)
@@ -67,10 +67,10 @@ def get_detail_of_favorite(fid:int, u: model.User = Depends(get_current_real_use
   }
 
 @router.delete('/{fid}')
-def delete_favorite(fid:int, u: model.User = Depends(get_current_real_user)):
+def delete_favorite(fid:int, u: models.User = Depends(get_current_real_user)):
   try:
-    fav = model.Favorite.get(id=fid)
-  except model.Favorite.DoesNotExist:
+    fav = models.Favorite.get(id=fid)
+  except models.Favorite.DoesNotExist:
     raise HTTPException(status.HTTP_404_NOT_FOUND)
   if fav.user.id != u.id:
     raise HTTPException(status.HTTP_404_NOT_FOUND)

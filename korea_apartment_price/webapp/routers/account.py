@@ -3,7 +3,8 @@ import json
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from korea_apartment_price.webapp import ADMIN_PASSWORD, model, BaseResponse
+from fastapi.security import OAuth2PasswordRequestForm
+from korea_apartment_price.webapp import ADMIN_PASSWORD, BaseResponse, models
 from korea_apartment_price.webapp.deps import (
   get_current_admin_user,
   get_current_user
@@ -15,19 +16,42 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-class LoginForm(BaseModel):
+class Token(BaseModel):
+  access_token: str
+  token_type: str
+
+
+@router.post("/token", response_model=Token)
+async def login(f: OAuth2PasswordRequestForm=Depends()):
+  user = models.User.login(f.username, f.password)
+  if not user:
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="wrong credential",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+  token = user.to_jwt()
+  return {"access_token": token, "token_type": "bearer"}
+
+@router.get("/token_refresh", response_model=Token)
+async def token_refresh(u: models.User = Depends(get_current_user)):
+  token = u.to_jwt()
+  return {"access_token": token, "token_type": "bearer"}
+
+
+class RegisterForm(BaseModel):
   email: str
   password: str
 
 @router.post("/register")
-async def user_register(f: LoginForm)->BaseResponse:
+async def user_register(f: RegisterForm)->BaseResponse:
   if len(f.password) < 8:
     raise HTTPException(
       status_code=status.HTTP_400_BAD_REQUEST,
       detail="password should be at least 8 chars long"
     )
   try:
-    u = model.User.register(f.email, f.password)
+    u = models.User.register(f.email, f.password)
   except Exception as e:
     print(e)
     raise HTTPException(
@@ -39,9 +63,9 @@ async def user_register(f: LoginForm)->BaseResponse:
   }
 
 @router.get("/")
-async def user_list(u: model.User = Depends(get_current_admin_user), pageidx:int=1, items_per_page: int=50):
-  user_cnt = model.User.select().count()
-  users = list(model.User.select().order_by(model.User.date_created).paginate(pageidx, items_per_page))
+async def user_list(u: models.User = Depends(get_current_admin_user), pageidx:int=1, items_per_page: int=50):
+  user_cnt = models.User.select().count()
+  users = list(models.User.select().order_by(models.User.date_created).paginate(pageidx, items_per_page))
   return {
     'status': 'ok',
     'result':{
@@ -53,10 +77,10 @@ async def user_list(u: model.User = Depends(get_current_admin_user), pageidx:int
   }
 
 @router.get("/{user_id}")
-async def user_detail(user_id: int, u: model.User = Depends(get_current_user)):
+async def user_detail(user_id: int, u: models.User = Depends(get_current_user)):
   try:
-    tu = model.User.get(id=user_id)
-  except model.User.DoesNotExist:
+    tu = models.User.get(id=user_id)
+  except models.User.DoesNotExist:
     raise HTTPException(status.HTTP_404_NOT_FOUND)
   if not (tu.id == u.id or u.is_admin): 
     raise HTTPException(status.HTTP_404_NOT_FOUND)
@@ -79,11 +103,11 @@ class AccountSetReq(BaseModel):
   settings: Optional[str]
 
 
-@router.post("/{user_id}/set")
-async def user_set(user_id:int, req: AccountSetReq, u: model.User = Depends(get_current_user)):
+@router.post("/{user_id}")
+async def user_set(user_id:int, req: AccountSetReq, u: models.User = Depends(get_current_user)):
   try:
-    tu = model.User.get(id=user_id)
-  except model.User.DoesNotExist:
+    tu = models.User.get(id=user_id)
+  except models.User.DoesNotExist:
     raise HTTPException(status.HTTP_404_NOT_FOUND)
   if not (tu.id == u.id or u.is_admin): 
     raise HTTPException(status.HTTP_404_NOT_FOUND)
@@ -93,7 +117,7 @@ async def user_set(user_id:int, req: AccountSetReq, u: model.User = Depends(get_
   if req.is_admin is not None:
     tu.is_admin = req.is_admin
   if req.password is not None:
-    tu.pwhash = model.User.hash_password(tu.email, req.password)
+    tu.pwhash = models.User.hash_password(tu.email, req.password)
   if req.settings is not None:
     tu.settings = req.settings
   tu.save()
