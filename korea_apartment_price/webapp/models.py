@@ -3,6 +3,7 @@ import hashlib
 import datetime
 from typing import Any, Dict, List, Optional
 
+import json
 import jwt
 from peewee import *
 from korea_apartment_price.webapp import *
@@ -99,6 +100,13 @@ class User(BaseModel):
   @property
   def is_real(self):
     return self.id is not None
+  
+  @property
+  def parsed_settings(self)->Dict[str, Any]:
+    try:
+      return json.loads(self.settings)
+    except json.JSONDecodeError:
+      return dict()
 
 
 class Favorite(BaseModel):

@@ -1,6 +1,39 @@
+import json
 import os
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
+from fastapi.exceptions import RequestValidationError
+
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from korea_apartment_price.webapp import DEBUG
+from korea_apartment_price.webapp.types import BaseResponse
+
+
+app = FastAPI()
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request, exc):
+  res = BaseResponse(success=False, msg=exc.detail) 
+  return PlainTextResponse(json.dumps(res, ensure_ascii=False), status_code=exc.status_code)
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+  res = BaseResponse(success=False, msg=str(exc)) 
+  return PlainTextResponse(json.dumps(res, ensure_ascii=False), status_code=400)
+
+
+if DEBUG:
+  app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['*'],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+  )
+
 
 from korea_apartment_price.webapp.routers import (
   account,

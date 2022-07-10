@@ -1,10 +1,11 @@
 import re
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 import korea_apartment_price
 from korea_apartment_price.db import ApartmentId
+from korea_apartment_price.webapp.types import BaseResponse
 from korea_apartment_price.webapp.deps import (
   get_current_user
 )
@@ -22,10 +23,10 @@ class ApartmentIdModel(BaseModel):
   lawaddrcode: str
   name: str
 
-@router.get("/search", response_model=List[ApartmentIdModel])
+@router.get("/search", response_model=BaseResponse[List[ApartmentIdModel]])
 async def search_apt(addr: str='', apt_name: str=''):
   aptlst = korea_apartment_price.shortcuts.search(addr, apt_name)
-  return aptlst
+  return BaseResponse(success=True, result=aptlst)
 
 
 class AptIdRequest(BaseModel):
@@ -47,7 +48,7 @@ def _keep_keys_in_dict(x: Dict[str, Any], keep:List[str])->Dict[str, Any]:
     if k in x: res[k] = x.get(k)
   return res
 
-@router.post("/sizes", response_model=List[int])
+@router.post("/sizes", response_model=BaseResponse[List[float]])
 async def query_sizes(query: AptIdRequest):
   apt_id: ApartmentId = {
     'address': query.address,
@@ -57,11 +58,17 @@ async def query_sizes(query: AptIdRequest):
   sizes = korea_apartment_price.db.query_sizes(
     apt_id=apt_id,
   )
+  return BaseResponse(success=True, result=sizes)
 
-  return sizes
 
+class TradeEntry(BaseModel):
+  price: float
+  date_serial: int
+  floor: int
+  is_canceled: bool
+  canceled_date: Optional[str]
 
-@router.post("/trades")
+@router.post("/trades", response_model=BaseResponse[List[TradeEntry]])
 async def query_trades(query: HistoryRequest):
   apt_id: ApartmentId = {
     'address': query.address,
@@ -78,9 +85,16 @@ async def query_trades(query: HistoryRequest):
 
   for e in trades: del e['_id']
   trades = [_keep_keys_in_dict(r, ['price', 'date_serial', 'floor', 'is_canceled', 'canceled_date']) for r in trades]
-  return trades
+  return BaseResponse(success=True, result=trades)
 
-@router.post("/rents")
+
+class RentEntry(BaseModel):
+  price_deposit: float
+  price_monthly: float
+  date_serial: int
+  floor: int
+
+@router.post("/rents", response_model=BaseResponse[List[RentEntry]])
 async def query_rents(query: HistoryRequest):
   apt_id: ApartmentId = {
     'address': query.address,
@@ -97,9 +111,10 @@ async def query_rents(query: HistoryRequest):
   )
 
   rents = [_keep_keys_in_dict(r, ['price_deposit', 'price_monthly', 'date_serial', 'floor']) for r in rents]
-  return rents
+  return BaseResponse(success=True, result=rents)
 
-@router.post("/info")
+
+@router.post("/info", response_model=BaseResponse[Dict])
 async def query_info(query: AptIdRequest):
   apt_id: ApartmentId = {
     'address': query.address,
@@ -110,12 +125,14 @@ async def query_info(query: AptIdRequest):
   info = korea_apartment_price.db.query_kb_apart (
     apt_id=apt_id,
   )
-  if 'regulList' in info:
-    del info['regulList']
-  return info['detail']
+  res = info['detail']
+  if 'regulList' in res:
+    del res['regulList']
+  return BaseResponse(success=True, result=res)
 
 
-@router.post("/orderbook")
+
+@router.post("/orderbook", response_model=BaseResponse[Any])
 async def query_orderbook(query: HistoryRequest, mode:Literal['simple', 'detail', 'agg']='agg'):
   apt_id: ApartmentId = {
     'address': query.address,
@@ -183,15 +200,16 @@ async def query_orderbook(query: HistoryRequest, mode:Literal['simple', 'detail'
         'fetched_date': fetched_date,
         'items': items
       })
-    return res
+    return BaseResponse(success=True, result=res)
 
 
   elif mode == 'simple' or mode == 'detail':
     for o in orderbook:
       if '_id' in o:
         del o['_id']
-        if not mode == 'simple':
+        if mode == 'simple':
           del o['detail']
+    print (orderbook)
   else:
     return []
-  return orderbook
+  return BaseResponse(success=True, result=orderbook)
