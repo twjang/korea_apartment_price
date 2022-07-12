@@ -98,14 +98,16 @@ export const fromSVGs = async (svgEntries: Record<string, SVGEntry>): Promise<Te
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const buffer = new Uint8Array(imgData.data);
   const texture = new THREE.DataTexture(buffer, bestPlacement.textureWidth, bestPlacement.textureHeight, THREE.RGBAFormat, THREE.UnsignedByteType);
+  texture.flipY = true;
+  texture.magFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
 
   /*
    uv coordinate
-    (-1, 1) ----- (1, 1)
+    (0, 1) ----- (1, 1)
        |            |
        |            |
-    (-1, -1) ---- (1, -1)
+    (0, 0) ----- (1, 0)
   */
   const bbox: Record<string, number[]> = {};
   seKeys.forEach(seKey=>{
@@ -113,10 +115,10 @@ export const fromSVGs = async (svgEntries: Record<string, SVGEntry>): Promise<Te
     const y1 = bestPlacement.placement[seKey].top;
     const x2 = x1 + svgSizes[seKey].width;
     const y2 = y1 + svgSizes[seKey].height;
-    const u1 = -1.0 + 2 * x1 / bestPlacement.textureWidth;
-    const v1 = 1.0 - 2 * y1 / bestPlacement.textureHeight; 
-    const u2 = -1.0 + 2 * x2 / bestPlacement.textureWidth;
-    const v2 = 1.0 - 2 * y2 / bestPlacement.textureHeight; 
+    const u1 = x1 / bestPlacement.textureWidth;
+    const v1 = 1.0 - y1 / bestPlacement.textureHeight; 
+    const u2 = x2 / bestPlacement.textureWidth;
+    const v2 = 1.0 - y2 / bestPlacement.textureHeight; 
     bbox[seKey] = [u1, v1, u2, v2];
   })
 

@@ -18,14 +18,20 @@ export const fromDashType = async (dashTypes: Record<string, DashTypeEntry>): Pr
   const patternSize: Record<string, number> = {};
 
 
-  const textureWidth = 256;
+  const maxPatternLength = Math.floor(Math.max(
+    ...Object.keys(dashTypes).map(key => { 
+      const pat = dashTypes[key].pattern; 
+      return pat.reduce((p, v) => { return p + v; }, 0); 
+    })
+  ));
+
   const heightPerDashType = 8;
+  const minSize = 128;
+  const textureWidth = Math.max(minSize, Math.pow(2, Math.ceil(Math.log2(maxPatternLength))));
+  const textureHeight = Math.max(minSize, Math.pow(2, Math.ceil(Math.log2(dtKeys.length * heightPerDashType))));
 
-  let textureHeight = Math.max(textureWidth, dtKeys.length * heightPerDashType);
-  textureHeight += (textureHeight % 32)?(32 - (textureHeight % 32)): 0;
 
-  const buffer = new Uint8Array(textureWidth * textureHeight);
-  buffer.fill(0);
+  const buffer = new Uint8Array(textureWidth * textureHeight * 4);
 
   dtKeys.forEach((dtKey,dtKeyIdx) =>{
     let pixelRange: number[] = [0.0];
@@ -38,25 +44,32 @@ export const fromDashType = async (dashTypes: Record<string, DashTypeEntry>): Pr
     for (let y=yStart; y < yEnd; y++) {
       const baseIdx = y * textureWidth;
       for (let dashElemIdx=0; dashElemIdx < dashTypes[dtKey].pattern.length; dashElemIdx++) {
-        if (dashElemIdx % 2 == 1) continue; // odd indexed pattern value indicates blank length
+        if (dashElemIdx % 2 === 1) continue; // odd indexed pattern value indicates blank length
         let fillStartIdx = baseIdx + pixelRange[dashElemIdx];
         let fillEndIdx = baseIdx + pixelRange[dashElemIdx + 1];
         for (let fillIdx = fillStartIdx; fillIdx < fillEndIdx; fillIdx++) {
-          buffer[fillIdx] = 255;
+          buffer[fillIdx * 4] = 255;
+          buffer[fillIdx * 4 + 1] = 255;
+          buffer[fillIdx * 4 + 2] = 255;
+          buffer[fillIdx * 4 + 3] = 255;
         }
       }
     }
   })
 
-
-  const texture = new THREE.DataTexture(buffer, textureWidth, textureHeight);
+  const texture = new THREE.DataTexture(
+    buffer,
+    textureWidth, textureHeight,
+    THREE.RGBAFormat, THREE.UnsignedByteType);
+  texture.flipY = true;
+  texture.needsUpdate = true;
 
   /*
    uv coordinate
-    (-1, 1) ----- (1, 1)
+    (0, 1) ----- (1, 1)
        |            |
        |            |
-    (-1, -1) ---- (1, -1)
+    (0, 0) ---- (1, 0)
   */
   const bbox: Record<string, number[]> = {};
   dtKeys.forEach((dtKey, dtKeyIdx) =>{
@@ -64,10 +77,10 @@ export const fromDashType = async (dashTypes: Record<string, DashTypeEntry>): Pr
     const y1 = dtKeyIdx * heightPerDashType;
     const x2 = textureWidth;
     const y2 = y1 + heightPerDashType;
-    const u1 = -1.0 + 2 * x1 / textureWidth;
-    const v1 = 1.0 - 2 * y1 / textureHeight; 
-    const u2 = -1.0 + 2 * x2 / textureWidth;
-    const v2 = 1.0 - 2 * y2 / textureHeight; 
+    const u1 = x1 / textureWidth;
+    const v1 = 1.0 - y1 / textureHeight; 
+    const u2 = x2 / textureWidth;
+    const v2 = 1.0 - y2 / textureHeight; 
     bbox[dtKey] = [u1, v1, u2, v2];
   });
 

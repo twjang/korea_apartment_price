@@ -1,13 +1,14 @@
 import * as React from 'react';
 import * as THREE from 'three';
-import { MarkerType } from '../types';
+import { ChartObjectProp, MarkerType } from '../types';
 import { getSVGMarker } from '../utils/svgMarkerLib';
 import { fromSVGs } from '../textureBuilder/fromSVGs';
 import { useThree } from '@react-three/fiber';
-import { MeshBasicMaterial, ShaderLib, ShaderMaterial } from 'three';
+import { ShaderMaterial } from 'three';
+import { makeArrayFromNumber } from '../utils';
 
 
-export type ChartPointGroupProp = {
+export type ChartPointMarkerGroupProp = {
   x: Float32Array
   y: Float32Array
   size: number // size in pixel
@@ -15,22 +16,9 @@ export type ChartPointGroupProp = {
   borderColor?: Uint8Array | number // RGBA
   borderWidth?: number
   markerType?: MarkerType
-  visibleRange: number[]
-  chartRegion: number[]
-};
+} & ChartObjectProp;
 
-const makeArrayFromNumber = (x:number, coeff?:number): number[] =>{
-  const v = [];
-  for (let i=0; i< 4; i++) {
-    if (coeff) v.push((x % 256) * coeff);
-    else v.push((x % 256));
-    x = Math.floor(x / 256);
-  }
-  return v.reverse();
-}
-
-
-export const ChartPointGroup = (prop:ChartPointGroupProp)=>{
+export const ChartPointMarkerGroup = (prop:ChartPointMarkerGroupProp)=>{
   const numPoints = prop.x.length;
   const [markerTexture, setMarkerTexture] = React.useState<THREE.DataTexture | null>(null);
   const threeCtx = useThree();
@@ -55,13 +43,11 @@ export const ChartPointGroup = (prop:ChartPointGroupProp)=>{
 
     if (typeof prop.fillColor === 'number') {
       const t = makeArrayFromNumber(prop.fillColor, 1.0 / 255.0);
-      console.log('fill', t);
       fillColor = new THREE.Vector4(t[0], t[1], t[2], t[3]);
     }
 
     if (typeof prop.borderColor === 'number') {
       const t = makeArrayFromNumber(prop.borderColor, 1.0 / 255.0);
-      console.log('border', t);
       borderColor = new THREE.Vector4(t[0], t[1], t[2], t[3]);
     }
 
@@ -75,12 +61,12 @@ export const ChartPointGroup = (prop:ChartPointGroupProp)=>{
     const vertUV = new Float32Array(numPoints * 2 * 4);
 
     for (let i = 0; i < numPoints; i++) {
-      let idx12 = i * 12;
       let idx8 = i * 8;
+      let idx12 = i * 12;
       for (let j = 0; j < 12; j += 3) {
         vertPositions[idx12 + j] = prop.x[i];
         vertPositions[idx12 + j + 1] = prop.y[i];
-        vertPositions[idx12 + j + 2] = 0.0;
+        vertPositions[idx12 + j + 2] = 0;
       }
       vertUV[idx8 + 0] = 0.0; vertUV[idx8 + 1] = 1.0;
       vertUV[idx8 + 2] = 1.0; vertUV[idx8 + 3] = 1.0;
@@ -144,6 +130,7 @@ export const ChartPointGroup = (prop:ChartPointGroupProp)=>{
       transparent: true,
       uniforms: {
         uSize: { value: 1.0 },
+        uZOffset: {value: 0.0},
         uCanvasSizeInv: { value: new THREE.Vector2(0.01, 0.01)},
         uChartRegionBottomLeft: { value: new THREE.Vector2(-1.0, -1.0)},
         uChartRegionSize: { value: new THREE.Vector2(2.0, 2.0)},
@@ -156,6 +143,7 @@ export const ChartPointGroup = (prop:ChartPointGroupProp)=>{
       vertexShader: `
 precision lowp float;
 uniform float uSize;
+uniform float uZOffset;
 uniform vec2 uCanvasSizeInv;
 uniform vec2 uChartRegionBottomLeft;
 uniform vec2 uChartRegionSize;
@@ -181,12 +169,12 @@ void main() {
   if (uSharedBorderColor.w > 0.0) vBorderColor = uSharedBorderColor;
   else vBorderColor = borderColor;
   
-  float ptsX = (position.x - uVisibleRangeBottomLeft.x) * uVisibleRangeSizeInv.x;
-  float ptsY = (position.y - uVisibleRangeBottomLeft.y) * uVisibleRangeSizeInv.y;
-  if (0.0 <= ptsX && ptsX <= 1.0 && 0.0 <= ptsY && ptsY <= 1.0) {
-    gl_Position.xy = vec2(ptsX, ptsY) * uChartRegionSize + uChartRegionBottomLeft;
+  vec2 pts = (position.xy - uVisibleRangeBottomLeft) * uVisibleRangeSizeInv;
+  if (0.0 <= pts.x && pts.x <= 1.0 && 0.0 <= pts.y && pts.y <= 1.0) {
+    gl_Position.xy = pts * uChartRegionSize + uChartRegionBottomLeft;
     gl_Position.xy += (uv - vec2(0.5, 0.5)) * uSize * uCanvasSizeInv * 2.0;
-    gl_Position.zw = vec2(0.0, 1.0);
+    gl_Position.z = uZOffset;
+    gl_Position.w = 1.0;
   } else {
     gl_Position = vec4(0.0, 0.0, 0.0, 0.0);
   }
@@ -223,7 +211,6 @@ void main() {
       }
       shaderRef.current.uniforms.uSize = {value: prop.size};
       shaderRef.current.uniformsNeedUpdate=true;
-      console.log(shaderRef.current.uniforms)
     }
   }, [shaderRef.current, threeCtx.size, markerTexture]);
 
@@ -256,6 +243,14 @@ void main() {
 
   React.useEffect(()=>{
     if (shaderRef.current) {
+      const zOffset = (prop.zOrder)? 1 + 0.5 * Math.tanh(prop.zOrder): 0.0;
+      shaderRef.current.uniforms.uZOffset= {value: zOffset};
+      shaderRef.current.uniformsNeedUpdate=true;
+    }
+  }, [prop.zOrder])
+
+  React.useEffect(()=>{
+    if (shaderRef.current) {
       shaderRef.current.uniforms.uSharedFillColor = {value: sharedFillColor};
       shaderRef.current.uniformsNeedUpdate=true;
     }
@@ -270,7 +265,6 @@ void main() {
 
   const mesh = React.useRef<THREE.Mesh>(null);
   const geometry = React.useRef<THREE.BufferGeometry>(null);
-  const boxgeometry = React.useRef<THREE.BoxGeometry>(null);
   return (
     <mesh ref={mesh}>
       <bufferGeometry ref={geometry} >
