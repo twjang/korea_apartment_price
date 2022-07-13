@@ -7,8 +7,8 @@ import { ChartStyledPathGroup } from './objects/StyledPathGroup';
 
 
 export default function ChartDemo() {
-  const numPts = 1000;
-  const numTheta = 20000;
+  const numPts = 100;
+  const numTheta = 100;
 
   const [ptsX, ptsY, ptsSize] = React.useMemo<[Float32Array, Float32Array, number]>(()=>{
     const x = new Float32Array(numPts);
@@ -20,16 +20,23 @@ export default function ChartDemo() {
     return [x, y, 12];
   }, []);
 
-  const [lineX01, lineY01] = React.useMemo<[Float32Array, Float32Array]>(()=>{
+  const [lineX01, lineY01, color01] = React.useMemo<[Float32Array, Float32Array, Uint8Array]>(()=>{
     const x = new Float32Array(numTheta);
     const y = new Float32Array(numTheta);
+    const c = new Uint8Array(numTheta * 4);
     for (let i=0; i<numTheta; i++) {
       const theta = i * 2 * 3.141592 / (numTheta - 1 );
       const r = Math.cos(5 * theta - 3.141592 / 2) * 0.2 + 0.7
       x[i] = r * Math.cos(theta)
       y[i] = r * Math.sin(theta)
+      const curColor = new THREE.Color()
+      curColor.setHSL(i /numTheta, 0.9, 0.4);
+      c[i * 4] = Math.floor(curColor.r * 255.0);
+      c[i * 4+1] = Math.floor(curColor.g * 255.0);
+      c[i * 4+2] = Math.floor(curColor.b * 255.0);
+      c[i * 4+3] = Math.floor((0.5 + Math.cos(theta * 3) * 0.2) * 255.0);
     }
-    return [x, y];
+    return [x, y, c];
   }, []);
 
   const [lineX02, lineY02] = React.useMemo<[Float32Array, Float32Array]>(()=>{
@@ -58,9 +65,9 @@ export default function ChartDemo() {
         chartRegion={[0.2, 0.2, 0.8, 0.8]}
         markerType="triangle" />
       <ChartStyledPathGroup paths={[
-        { x: lineX01, y: lineY01 },
+        { x: lineX01, y: lineY01, color: color01, width: 20 },
         { x: lineX02, y: lineY02 },
-      ]} lineWidth={2} lineColor={0xFF0000FF} 
+      ]} width={2} color={0xFF0000FF} 
         visibleRange={[-1.0, -1.0, 1.0, 1.0]}
         chartRegion={[0.2, 0.2, 0.8, 0.8]}
         zOrder={1}
