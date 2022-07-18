@@ -243,7 +243,7 @@ void main() {
 
   React.useEffect(()=>{
     if (shaderRef.current) {
-      const zOffset = (prop.zOrder)? 1 + 0.5 * Math.tanh(prop.zOrder): 0.0;
+      const zOffset = (prop.zOrder)? 0.5 + 0.45 * Math.tanh(prop.zOrder): 0.5;
       shaderRef.current.uniforms.uZOffset= {value: zOffset};
       shaderRef.current.uniformsNeedUpdate=true;
     }

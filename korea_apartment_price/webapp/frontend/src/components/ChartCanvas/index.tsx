@@ -4,11 +4,13 @@ import * as THREE from 'three'
 import { Canvas } from '@react-three/fiber'
 import { ChartPointMarkerGroup } from './objects/PointMarkerGroup';
 import { ChartStyledPathGroup } from './objects/StyledPathGroup';
+import { ChartLineGroup, Line } from './objects/LineGroup';
 
 
 export default function ChartDemo() {
   const numPts = 100;
   const numTheta = 100;
+  const numLines = 5;
 
   const [ptsX, ptsY, ptsSize] = React.useMemo<[Float32Array, Float32Array, number]>(()=>{
     const x = new Float32Array(numPts);
@@ -50,6 +52,26 @@ export default function ChartDemo() {
     }
     return [x, y];
   }, []);
+
+  const [lines] = React.useMemo<[Line[]]>(()=>{
+    const lines: Line[] = [];
+
+    for (let i=0; i<numLines; i++) {
+      const theta = (i + 0.125) * 2 * 3.141592 / (numLines );
+      const r = 0.1;
+      const x = r * Math.cos(theta);
+      const y = r * Math.sin(theta);
+      const dx = - Math.sin(theta); 
+      const dy = Math.cos(theta);
+      lines.push({
+        x, y, dx, dy, width: i +1
+      })
+    }
+    lines.push({x: 0.5, y:0.5, dx:0.0, dy:-1, color:0x0000ffff, width: 5})
+    lines.push({x: 0.5, y:0.5, dx:-1, dy:-0.0, color:0xff00ffff, width: 6})
+    return [lines];
+  }, []);
+  
   
   const camera = React.useMemo<THREE.OrthographicCamera>(()=>{
     return new THREE.OrthographicCamera(-1, 1, 1, -1, -10, 10);
@@ -57,6 +79,12 @@ export default function ChartDemo() {
 
   return (
     <Canvas>
+      <ChartLineGroup lines={lines}
+        width={4} color={0xFF0000FF} 
+        visibleRange={[-1.0, -1.0, 1.0, 1.0]}
+        chartRegion={[0.2, 0.2, 0.8, 0.8]}
+        zOrder={2}
+      />
       <ChartPointMarkerGroup x={ptsX} y={ptsY} size={ptsSize}
         fillColor={0xFFFF00FF} 
         borderColor={0x000000FF}
@@ -67,7 +95,8 @@ export default function ChartDemo() {
       <ChartStyledPathGroup paths={[
         { x: lineX01, y: lineY01, color: color01, width: 20 },
         { x: lineX02, y: lineY02 },
-      ]} width={2} color={0xFF0000FF} 
+      ]} 
+        width={2} color={0xFF0000FF} 
         visibleRange={[-1.0, -1.0, 1.0, 1.0]}
         chartRegion={[0.2, 0.2, 0.8, 0.8]}
         zOrder={1}
