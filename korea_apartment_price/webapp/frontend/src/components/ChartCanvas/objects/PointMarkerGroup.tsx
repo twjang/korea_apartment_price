@@ -193,7 +193,12 @@ void main() {
   float pFill = chosenColor.y; 
   vec4 vFill = vec4(pFill, pFill, pFill, pFill);
   vec4 vBorder = vec4(pBorder, pBorder, pBorder, pBorder);
-  gl_FragColor = vFill * vFillColor + vBorder * vBorderColor;
+  vec4 finalColor = vFill * vFillColor + vBorder * vBorderColor;
+  if (finalColor.w < 0.01) {
+    discard;
+  } else {
+    gl_FragColor = finalColor;
+  }
 }`
 
     };

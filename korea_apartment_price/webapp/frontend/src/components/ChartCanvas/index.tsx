@@ -5,6 +5,7 @@ import { Canvas } from '@react-three/fiber'
 import { ChartPointMarkerGroup } from './objects/PointMarkerGroup';
 import { ChartStyledPathGroup } from './objects/StyledPathGroup';
 import { ChartLineGroup, Line } from './objects/LineGroup';
+import { ChartFilledAreaGroup } from './objects/FilledAreaGroup';
 
 
 export default function ChartDemo() {
@@ -100,6 +101,16 @@ export default function ChartDemo() {
         visibleRange={[-1.0, -1.0, 1.0, 1.0]}
         chartRegion={[0.2, 0.2, 0.8, 0.8]}
         zOrder={1}
+      />
+      <ChartFilledAreaGroup filledArea={[
+        {
+          contour: { x: lineX01, y: lineY01},
+          color: 0xFF000088
+        }
+      ]} 
+        color={0xFFFF00FF} 
+        visibleRange={[-1.0, -1.0, 1.0, 1.0]}
+        chartRegion={[0.2, 0.2, 0.8, 0.8]}
       />
     </Canvas>
   )

@@ -301,6 +301,7 @@ export const ChartStyledPathGroup = (prop:ChartStyledPathGroupProp)=>{
       vertexShader: `
 precision lowp float;
 uniform float uLineWidth;
+uniform float uZOffset;
 uniform vec2 uCanvasSize;
 uniform vec2 uCanvasSizeInv;
 uniform vec2 uChartRegionBottomLeft;
@@ -371,7 +372,7 @@ void main() {
     } else {
       gl_Position.xy += curLineWidth * bevel_edge(corTgntA, corTgntB) * curDir * uCanvasSizeInv;
     }
-    gl_Position.zw = vec2(0.0, 1.0);
+    gl_Position.zw = vec2(uZOffset, 1.0);
   } else {
     gl_Position = vec4(0.0, 0.0, 0.0, 0.0);
   }

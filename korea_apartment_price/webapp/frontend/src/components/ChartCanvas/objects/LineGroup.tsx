@@ -375,28 +375,6 @@ void main() {
     }
   }, [prop.zOrder])
 
-
-  {
-    let debug: Record<string, any> = {
-      vertIndices,
-      vertPositions,
-      vertColor,
-      vertWidth,
-      vertPointId,
-    };
-    Object.keys(debug).forEach(k=>{
-      debug[k] = Array.from((debug[k] as Uint8Array));
-    })
-
-    let uniforms:Record<string, any> = Object.assign({}, shaderData.uniforms);
-    Object.keys(uniforms).forEach(k=>{
-      uniforms[k] = uniforms[k].value;
-    })
-    debug['uniforms'] = uniforms;
-    console.log(debug);
-    // console.log(JSON.stringify(debug));
-  }
-
   const meshRef = React.useRef<THREE.Mesh>(null);
   const geometry = React.useRef<THREE.BufferGeometry>(null);
 
