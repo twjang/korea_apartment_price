@@ -4,7 +4,7 @@ import { getRouteElements, PageHierarchyProvider } from './pages';
 import { AuthProvider } from './contexts/AuthContext';
 import { SnackbarProvider } from 'notistack';
 import { SimpleQuestionModalProvider } from './components/SimpleQuestionModal';
-import ChartDemo from './components/ChartCanvas';
+import ChartDemo from './components/ChartCanvas/demo';
 
 
 function AppOrig() {

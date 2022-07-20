@@ -6,7 +6,5 @@ export type MarkerType = 'o' | 'box' | "heart" | "dialog_balloon" | "diamond" |
 
 
 export type ChartObjectProp = {
-  visibleRange: number[]
-  chartRegion: number[]
   zOrder?: number
 };

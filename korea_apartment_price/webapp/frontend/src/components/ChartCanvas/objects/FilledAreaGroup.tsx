@@ -4,6 +4,7 @@ import { ChartObjectProp } from '../types';
 import { useThree } from '@react-three/fiber';
 import { ShaderMaterial } from 'three';
 import { makeArrayFromNumber } from '../utils';
+import { useChartViewInfo } from '../utils/ChartViewContext';
 
 
 export type Contour = {
@@ -34,6 +35,8 @@ type ThreeAreaDef = {
 
 export const ChartFilledAreaGroup = (prop:ChartFilledAreaGroupProp)=>{
   const threeCtx = useThree();
+  const chartViewInfo = useChartViewInfo();
+
   const shaderRef = React.useRef<ShaderMaterial>(null);
   const useVertexColor = React.useMemo<boolean>(()=>{
     let vertexCustomColor = false;
@@ -177,14 +180,9 @@ void main() {
   vec2 ndsPts = pts * uChartRegionSize + uChartRegionBottomLeft;
   vec2 texturePts = pts * uChartRegionSize * uCanvasSize / uRepeatPeriod;
 
-  if (0.0 <= pts.x && pts.x <= 1.0 && 0.0 <= pts.y && pts.y <= 1.0) {
-    gl_Position.xy = ndsPts;
-    vUv = texturePts;
-    gl_Position.zw = vec2(uZOffset, 1.0);
-  } else {
-    gl_Position = vec4(0.0, 0.0, 0.0, 0.0);
-  }
-
+  gl_Position.xy = ndsPts;
+  vUv = texturePts;
+  gl_Position.zw = vec2(uZOffset, 1.0);
 }
 `,
       fragmentShader: `precision lowp float;
@@ -193,10 +191,20 @@ uniform sampler2D uTexture;
 uniform float uUseTextureAsPattern; 
 uniform float uUseTexture; 
 
+uniform vec2 uChartRegionBottomLeft;
+uniform vec2 uChartRegionSize;
+uniform vec2 uCanvasSize;
+
 varying vec4 vColor;
 varying vec2 vUv;
 
 void main() {
+  vec2 fragCoord = gl_FragCoord.xy / uCanvasSize * 2.0 - 1.0;
+  if (fragCoord.x < uChartRegionBottomLeft.x) discard; 
+  if (fragCoord.x > (uChartRegionBottomLeft.x + uChartRegionSize.x)) discard;
+  if (fragCoord.y < uChartRegionBottomLeft.y) discard;
+  if (fragCoord.y > (uChartRegionBottomLeft.y + uChartRegionSize.y)) discard;
+  
   if (uUseTexture > 0.0) {
     vec4 chosenColor = texture2D(uTexture, vUv - floor(vUv));
     if (uUseTextureAsPattern > 0.0) {
@@ -242,33 +250,34 @@ void main() {
     }
   }, [shaderRef.current, threeCtx.size, prop]);
 
-
   React.useEffect(()=>{
+    const visibleRange = chartViewInfo.visibleRange;
     if (shaderRef.current) {
       shaderRef.current.uniforms.uVisibleRangeSizeInv = {value: new THREE.Vector2(
-        1.0 / Math.abs(prop.visibleRange[2] - prop.visibleRange[0]),
-        1.0 / Math.abs(prop.visibleRange[3] - prop.visibleRange[1]),
+        1.0 / Math.abs(visibleRange[2] - visibleRange[0]),
+        1.0 / Math.abs(visibleRange[3] - visibleRange[1]),
       )};
-      shaderRef.current.uniforms.uVisibleBottomLeft = {value: new THREE.Vector2(
-        prop.visibleRange[0],
-        prop.visibleRange[3],
+      shaderRef.current.uniforms.uVisibleRangeBottomLeft = {value: new THREE.Vector2(
+        visibleRange[0],
+        visibleRange[1],
       )}
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [prop.visibleRange])
+  }, [chartViewInfo.visibleRange])
 
   React.useEffect(()=>{
+    const chartRegion = chartViewInfo.chartRegion;
     if (shaderRef.current) {
       shaderRef.current.uniforms.uChartRegionBottomLeft = {value: new THREE.Vector2(
-        prop.chartRegion[0] * 2.0 - 1.0, 1.0 - prop.chartRegion[3] * 2.0
+        chartRegion[0] * 2.0 - 1.0, 1.0 - chartRegion[3] * 2.0
       )};
       shaderRef.current.uniforms.uChartRegionSize = {value: new THREE.Vector2(
-        (prop.chartRegion[2] - prop.chartRegion[0]) * 2.0,
-        (prop.chartRegion[3] - prop.chartRegion[1]) * 2.0,
+        (chartRegion[2] - chartRegion[0]) * 2.0,
+        (chartRegion[3] - chartRegion[1]) * 2.0,
       )}
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [prop.chartRegion])
+  }, [chartViewInfo.chartRegion])
 
   React.useEffect(()=>{
     if (shaderRef.current) {
@@ -291,12 +300,6 @@ void main() {
   const meshRef = React.useRef<THREE.Mesh>(null);
   const geometry = React.useRef<THREE.BufferGeometry>(null);
 
-  console.log({
-    vertIndices,
-    vertPositions,
-    vertColors
-  })
-
   return (
     <mesh ref={meshRef}>
       <bufferGeometry ref={geometry} >
@@ -309,3 +312,5 @@ void main() {
     </mesh>
   );
 }
+
+export default ChartFilledAreaGroup;

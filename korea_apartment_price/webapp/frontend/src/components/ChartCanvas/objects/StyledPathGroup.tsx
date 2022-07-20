@@ -6,6 +6,7 @@ import { ShaderMaterial } from 'three';
 import { makeArrayFromNumber } from '../utils';
 import { fromDashType } from '../textureBuilder/fromDashType';
 import { color } from '@mui/system';
+import { useChartViewInfo } from '../utils/ChartViewContext';
 
 
 export type Path = {
@@ -44,9 +45,10 @@ const distEps = 1e-4;
 
 
 export const ChartStyledPathGroup = (prop:ChartStyledPathGroupProp)=>{
+  const threeCtx = useThree();
+  const chartViewInfo = useChartViewInfo();
   const [dashPatternTexture, setDashPatternTexture] = React.useState<THREE.DataTexture | null>(null);
   const [patternSize, setPatternSize] = React.useState<number | null>(null);
-  const threeCtx = useThree();
   const shaderRef = React.useRef<ShaderMaterial>(null);
 
 
@@ -361,21 +363,17 @@ void main() {
   vec2 widthVec = curLineWidth * uCanvasSizeInv;
 
   vec2 pts = (position.xy - uVisibleRangeBottomLeft) * uVisibleRangeSizeInv;
-  if (0.0 <= pts.x && pts.x <= 1.0 && 0.0 <= pts.y && pts.y <= 1.0) {
-    vec2 corTgntA = normalize(tgntA * uVisibleRangeSizeInv * uChartRegionSize * uCanvasSize);
-    vec2 corTgntB = normalize(tgntB * uVisibleRangeSizeInv * uChartRegionSize * uCanvasSize);
-    gl_Position.xy = pts * uChartRegionSize + uChartRegionBottomLeft;
-    if (tgntA == vec2(0.0, 0.0)) {
-      gl_Position.xy += curLineWidth * normal(corTgntB) * curDir * uCanvasSizeInv;
-    } else if (tgntB == vec2(0.0, 0.0)){
-      gl_Position.xy += curLineWidth * normal(corTgntA) * curDir * uCanvasSizeInv;
-    } else {
-      gl_Position.xy += curLineWidth * bevel_edge(corTgntA, corTgntB) * curDir * uCanvasSizeInv;
-    }
-    gl_Position.zw = vec2(uZOffset, 1.0);
+  vec2 corTgntA = normalize(tgntA * uVisibleRangeSizeInv * uChartRegionSize * uCanvasSize);
+  vec2 corTgntB = normalize(tgntB * uVisibleRangeSizeInv * uChartRegionSize * uCanvasSize);
+  gl_Position.xy = pts * uChartRegionSize + uChartRegionBottomLeft;
+  if (tgntA == vec2(0.0, 0.0)) {
+    gl_Position.xy += curLineWidth * normal(corTgntB) * curDir * uCanvasSizeInv;
+  } else if (tgntB == vec2(0.0, 0.0)){
+    gl_Position.xy += curLineWidth * normal(corTgntA) * curDir * uCanvasSizeInv;
   } else {
-    gl_Position = vec4(0.0, 0.0, 0.0, 0.0);
+    gl_Position.xy += curLineWidth * bevel_edge(corTgntA, corTgntB) * curDir * uCanvasSizeInv;
   }
+  gl_Position.zw = vec2(uZOffset, 1.0);
 
    
   for (int i=0; i<${numAngleHist}; i++) {
@@ -397,7 +395,17 @@ uniform float uPatternSize;
 varying vec4 vLineColor;
 varying float vPixelLength;
 
+uniform vec2 uChartRegionBottomLeft;
+uniform vec2 uChartRegionSize;
+uniform vec2 uCanvasSize;
+
 void main() {
+  vec2 fragCoord = gl_FragCoord.xy / uCanvasSize * 2.0 - 1.0;
+  if (fragCoord.x < uChartRegionBottomLeft.x) discard; 
+  if (fragCoord.x > (uChartRegionBottomLeft.x + uChartRegionSize.x)) discard;
+  if (fragCoord.y < uChartRegionBottomLeft.y) discard;
+  if (fragCoord.y > (uChartRegionBottomLeft.y + uChartRegionSize.y)) discard;
+
   float off = abs(vPixelLength) / uPatternSize;
   float pos = off - floor(off);
   vec4 chosenColor = texture2D(uTexture, vec2(pos, 0.99));
@@ -429,31 +437,33 @@ void main() {
   }, [shaderRef.current, threeCtx.size, dashPatternTexture]);
 
   React.useEffect(()=>{
+    const visibleRange = chartViewInfo.visibleRange;
     if (shaderRef.current) {
       shaderRef.current.uniforms.uVisibleRangeSizeInv = {value: new THREE.Vector2(
-        1.0 / Math.abs(prop.visibleRange[2] - prop.visibleRange[0]),
-        1.0 / Math.abs(prop.visibleRange[3] - prop.visibleRange[1]),
+        1.0 / Math.abs(visibleRange[2] - visibleRange[0]),
+        1.0 / Math.abs(visibleRange[3] - visibleRange[1]),
       )};
-      shaderRef.current.uniforms.uVisibleBottomLeft = {value: new THREE.Vector2(
-        prop.visibleRange[0],
-        prop.visibleRange[3],
+      shaderRef.current.uniforms.uVisibleRangeBottomLeft = {value: new THREE.Vector2(
+        visibleRange[0],
+        visibleRange[1],
       )}
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [prop.visibleRange])
+  }, [chartViewInfo.visibleRange])
 
   React.useEffect(()=>{
+    const chartRegion = chartViewInfo.chartRegion;
     if (shaderRef.current) {
       shaderRef.current.uniforms.uChartRegionBottomLeft = {value: new THREE.Vector2(
-        prop.chartRegion[0] * 2.0 - 1.0, 1.0 - prop.chartRegion[3] * 2.0
+        chartRegion[0] * 2.0 - 1.0, 1.0 - chartRegion[3] * 2.0
       )};
       shaderRef.current.uniforms.uChartRegionSize = {value: new THREE.Vector2(
-        (prop.chartRegion[2] - prop.chartRegion[0]) * 2.0,
-        (prop.chartRegion[3] - prop.chartRegion[1]) * 2.0,
+        (chartRegion[2] - chartRegion[0]) * 2.0,
+        (chartRegion[3] - chartRegion[1]) * 2.0,
       )}
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [prop.chartRegion])
+  }, [chartViewInfo.chartRegion])
 
   React.useEffect(()=>{
     if (shaderRef.current) {
@@ -510,3 +520,5 @@ void main() {
     </mesh>
   );
 }
+
+export default ChartStyledPathGroup;
