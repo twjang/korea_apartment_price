@@ -64,7 +64,7 @@ export const ChartLineGroup = (prop:ChartLineGroupProp)=>{
 
   */
 
-  const [usePointSpecificColor, usePathSpecificWidth] = React.useMemo<[boolean, boolean]>(()=>{
+  const [useLineSpecificColor, useLineSpecificWidth] = React.useMemo<[boolean, boolean]>(()=>{
     let useColor = false;
     let useWidth = false;
     prop.lines.forEach(line=>{ 
@@ -78,8 +78,8 @@ export const ChartLineGroup = (prop:ChartLineGroupProp)=>{
     Float32Array, Uint8Array, Uint16Array, Float32Array, Uint32Array
   ]>(() => {
     const vertPositions = new Float32Array(numLines * 4 * 4);
-    const vertColor = (usePointSpecificColor)? new Uint8Array(numLines * 4 * 4): new Uint8Array(1);
-    const vertWidth = (usePathSpecificWidth)? new Uint16Array(numLines * 4): new Uint16Array(1);
+    const vertColor = (useLineSpecificColor)? new Uint8Array(numLines * 4 * 4): new Uint8Array(1);
+    const vertWidth = (useLineSpecificWidth)? new Uint16Array(numLines * 4): new Uint16Array(1);
     const vertPointId = new Float32Array(numLines * 4);
     const vertIndices = new Uint32Array(numLines * 6);
 
@@ -141,7 +141,7 @@ export const ChartLineGroup = (prop:ChartLineGroupProp)=>{
     }
 
     return [vertPositions, vertColor, vertWidth, vertPointId, vertIndices];
-  }, [prop.lines]);
+  }, [prop.lines, numLines]);
 
 
   const shaderData = React.useMemo(()=>{
@@ -397,9 +397,9 @@ void main() {
       <bufferGeometry ref={geometry} >
         <bufferAttribute attach="index" count={vertIndices.length} array={vertIndices} itemSize={1} />
         <bufferAttribute attach="attributes-position" count={vertPositions.length / 4} array={vertPositions} itemSize={4} />
-        {usePointSpecificColor? 
+        {useLineSpecificColor? 
         <bufferAttribute attach="attributes-color" count={vertColor.length / 4} array={vertColor} itemSize={4} normalized />: <></>}
-        {usePathSpecificWidth? 
+        {useLineSpecificWidth? 
         <bufferAttribute attach="attributes-width" count={vertWidth.length} array={vertWidth} itemSize={1}  normalized />: <></>}
         <bufferAttribute attach="attributes-pointId" count={vertPointId.length} array={vertPointId} itemSize={1} />
       </bufferGeometry>
