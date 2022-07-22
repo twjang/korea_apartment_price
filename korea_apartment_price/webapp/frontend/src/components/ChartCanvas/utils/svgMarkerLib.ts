@@ -72,5 +72,5 @@ export const getSVGMarker = (name: SVGMarkerName, prop: SVGMarkerProp): string =
     <svg width="100px" height="100px" xmlns="http://www.w3.org/2000/svg">
     <g>"${contents.join('')}"</g></svg>`);
   
-    return svg;
+  return svg;
 }

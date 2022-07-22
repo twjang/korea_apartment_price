@@ -106,8 +106,8 @@ async def query_rents(query: HistoryRequest):
     apt_ids=[apt_id],
     date_from = query.date_from,
     date_to= query.date_to,
-    size_from = query.size, 
-    size_to = query.size 
+    size_from = query.size,
+    size_to = query.size
   )
 
   rents = [_keep_keys_in_dict(r, ['price_deposit', 'price_monthly', 'date_serial', 'floor']) for r in rents]
@@ -140,11 +140,11 @@ async def query_orderbook(query: HistoryRequest, mode:Literal['simple', 'detail'
     'name': query.name,
   }
   orderbook = sorted(
-    korea_apartment_price.db.query_kb_orderbook(apt_id, 
-    size_from=query.size-1, 
-    size_to=query.size+1, 
+    korea_apartment_price.db.query_kb_orderbook(apt_id,
+    size_from=query.size-1,
+    size_to=query.size+1,
     fetched_from=query.date_from,
-    fetched_to=query.date_from,
+    fetched_to=query.date_to,
   ), key=lambda x: x['fetched_at'])
 
   if mode == 'agg':
@@ -182,7 +182,7 @@ async def query_orderbook(query: HistoryRequest, mode:Literal['simple', 'detail'
 
     res_map = {}
     for fetched_date, price, apt_dong, apt_ho in res_set:
-      if not fetched_date in res_map: 
+      if not fetched_date in res_map:
         res_map[fetched_date] = {}
       if not price in res_map[fetched_date]:
         res_map[fetched_date][price] = []
@@ -200,16 +200,14 @@ async def query_orderbook(query: HistoryRequest, mode:Literal['simple', 'detail'
         'fetched_date': fetched_date,
         'items': items
       })
+    print(res)
     return BaseResponse(success=True, result=res)
-
-
   elif mode == 'simple' or mode == 'detail':
     for o in orderbook:
       if '_id' in o:
         del o['_id']
         if mode == 'simple':
           del o['detail']
-    print (orderbook)
   else:
     return []
   return BaseResponse(success=True, result=orderbook)

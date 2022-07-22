@@ -46,6 +46,7 @@ export const ChartFilledAreaGroup = (prop:ChartFilledAreaGroupProp)=>{
     return (!prop.textureAsPattern) && vertexCustomColor;
   }, [prop.filledArea]);
 
+
   const [vertPositions, vertIndices, vertColors] = React.useMemo<[Float32Array, Uint32Array, Uint8Array]>(()=>{
     const ptsCoords: number[] = [];
     const ptsColors: [number, number[]][] = []; // list of (count, color value)
@@ -144,7 +145,7 @@ export const ChartFilledAreaGroup = (prop:ChartFilledAreaGroupProp)=>{
         uCanvasSize: { value: new THREE.Vector2(100, 100)},
         uChartRegionBottomLeft: { value: new THREE.Vector2(-1.0, -1.0)},
         uChartRegionSize: { value: new THREE.Vector2(2.0, 2.0)},
-        uVisibleRangeSizeInv: { value: new THREE.Vector2(0.5, 0.5) }, // 1 / w, 1 / h
+        uVisibleRangeSize: { value: new THREE.Vector2(0.5, 0.5) }, // 1 / w, 1 / h
         uVisibleRangeBottomLeft: { value: new THREE.Vector2(-1.0, -1.0) }, // x1, y1, x2, y2
         uTexture: { value: (()=>{ 
           const texture = new THREE.Texture(); 
@@ -152,7 +153,7 @@ export const ChartFilledAreaGroup = (prop:ChartFilledAreaGroupProp)=>{
         })()},
       },
       vertexShader: `
-precision lowp float;
+precision mediump float;
 uniform vec4 uSharedColor;
 uniform float uZOffset;
 uniform float uUseVertexColor;
@@ -160,7 +161,7 @@ uniform vec2 uRepeatPeriod;
 uniform vec2 uCanvasSize;
 uniform vec2 uChartRegionBottomLeft;
 uniform vec2 uChartRegionSize;
-uniform vec2 uVisibleRangeSizeInv;
+uniform vec2 uVisibleRangeSize;
 uniform vec2 uVisibleRangeBottomLeft;
 
 attribute vec3 position;
@@ -176,7 +177,7 @@ void main() {
     vColor = uSharedColor;
   }
 
-  vec2 pts = (position.xy - uVisibleRangeBottomLeft) * uVisibleRangeSizeInv;
+  vec2 pts = (position.xy - uVisibleRangeBottomLeft) / uVisibleRangeSize;
   vec2 ndsPts = pts * uChartRegionSize + uChartRegionBottomLeft;
   vec2 texturePts = pts * uChartRegionSize * uCanvasSize / uRepeatPeriod;
 
@@ -185,7 +186,7 @@ void main() {
   gl_Position.zw = vec2(uZOffset, 1.0);
 }
 `,
-      fragmentShader: `precision lowp float;
+      fragmentShader: `precision mediump float;
 
 uniform sampler2D uTexture;
 uniform float uUseTextureAsPattern; 
@@ -224,10 +225,6 @@ void main() {
 
   React.useEffect(()=>{
     if (shaderRef.current) {
-      shaderRef.current.uniforms.uCanvasSizeInv = {value: new THREE.Vector2(
-        1.0 / threeCtx.size.width,
-        1.0 / threeCtx.size.height,
-      )};
       shaderRef.current.uniforms.uCanvasSize = {value: new THREE.Vector2(
         threeCtx.size.width,
         threeCtx.size.height,
@@ -248,14 +245,14 @@ void main() {
       shaderRef.current.uniforms.uUseVertexColor = {value: useVertexColor? 1.0 : 0.0};
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [shaderRef.current, threeCtx.size, prop]);
+  }, [threeCtx.size, prop]);
 
   React.useEffect(()=>{
     const visibleRange = chartViewInfo.visibleRange;
     if (shaderRef.current) {
-      shaderRef.current.uniforms.uVisibleRangeSizeInv = {value: new THREE.Vector2(
-        1.0 / Math.abs(visibleRange[2] - visibleRange[0]),
-        1.0 / Math.abs(visibleRange[3] - visibleRange[1]),
+      shaderRef.current.uniforms.uVisibleRangeSize = {value: new THREE.Vector2(
+        Math.abs(visibleRange[2] - visibleRange[0]),
+        Math.abs(visibleRange[3] - visibleRange[1]),
       )};
       shaderRef.current.uniforms.uVisibleRangeBottomLeft = {value: new THREE.Vector2(
         visibleRange[0],
@@ -287,7 +284,7 @@ void main() {
       )};
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [shaderRef.current, prop.color]);
+  }, [prop.color]);
 
   React.useEffect(()=>{
     if (shaderRef.current) {
@@ -295,10 +292,12 @@ void main() {
       shaderRef.current.uniforms.uZOffset= {value: zOffset};
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [shaderRef.current, prop.zOrder])
+  }, [prop.zOrder])
 
   const meshRef = React.useRef<THREE.Mesh>(null);
   const geometry = React.useRef<THREE.BufferGeometry>(null);
+
+  if (prop.filledArea.length === 0) return (<></>);
 
   return (
     <mesh ref={meshRef}>

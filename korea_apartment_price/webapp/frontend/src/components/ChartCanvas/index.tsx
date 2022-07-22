@@ -2,10 +2,7 @@ import * as React from 'react';
 import * as THREE from 'three'
 
 import { Canvas } from '@react-three/fiber'
-import { ChartViewContext, useChartViewInfo } from "./utils/ChartViewContext";
-import { ConstructionOutlined, LabelImportant, PlayForWork } from '@mui/icons-material';
-import { relative } from 'path';
-import ChartLineGroup, { Line } from './objects/LineGroup';
+import { ChartViewContext } from "./utils/ChartViewContext";
 
 export type LabelInfo = {
   value: number
@@ -18,7 +15,7 @@ export type ChartCanvasProp = {
   maxZoom?: [number, number]
   dataRange: [number, number, number, number];
   defaultVisibleRange?: [number, number, number, number],
-  children?:JSX.Element[]
+  children?:(JSX.Element | null)[] | JSX.Element
   xAxisLabels?: (range:[number, number])=>LabelInfo[]
   yAxisLabels?: (range:[number, number])=>LabelInfo[]
   gridColor?: string 
@@ -85,26 +82,38 @@ const defaultLabelGenerator=(range: [number, number]): LabelInfo[] => {
   return res;
 }
 
-const ChartCanvas = (prop:ChartCanvasProp) =>{ 
+const getOffset = (e: React.PointerEvent | React.WheelEvent): [number, number] => {
+  const rect = (e.target as HTMLDivElement).getBoundingClientRect();
+  return [e.clientX - rect.x, e.clientY - rect.y];
+}
 
+const ChartCanvas = (prop:ChartCanvasProp) =>{ 
   const [visibleRange, setVisibleRange] = React.useState<[number, number, number, number]>(
     (prop.defaultVisibleRange)? prop.defaultVisibleRange: prop.dataRange
   );
 
+  /*
   const frameRef = React.useRef<HTMLDivElement>(null);
-  const [canvasSize, setCanvasSize] = React.useState<[number, number] | null>(null);
+  const canvasSize: [number, number] | null = (frameRef.current)? [frameRef.current.clientWidth, frameRef.current.clientHeight]: null;
+  */
 
-  React.useEffect(() => { 
+  const [canvasSize, setCanvasSize] = React.useState<[number, number] | null>(null);
+  const frameRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(()=>{
     if (frameRef.current) {
-      setCanvasSize([frameRef.current!.clientWidth, frameRef.current!.clientHeight] as [number, number]);
+      setCanvasSize([frameRef.current.clientWidth, frameRef.current.clientHeight] as [number, number]);
     }
   }, []);
 
   const handleWheel = (e: React.WheelEvent)=>{
+    e.stopPropagation();
+
     if (!canvasSize) return;
 
-    const eventCoord = clientCoordToDataCoord(prop, [e.clientX, e.clientY], canvasSize, visibleRange);
+    const eventCoord = clientCoordToDataCoord(prop, getOffset(e), canvasSize, visibleRange);
     if (!eventCoord) return;
+
     
     let dx1 = visibleRange[0] - eventCoord[0];
     let dy1 = visibleRange[1] - eventCoord[1];
@@ -140,7 +149,7 @@ const ChartCanvas = (prop:ChartCanvasProp) =>{
   const handlePointerDown = (e: React.PointerEvent) => {
     if (!canvasSize) return;
 
-    const relCoord = clientCoordToChartCoord(prop, [e.clientX, e.clientY], canvasSize);
+    const relCoord = clientCoordToChartCoord(prop,  getOffset(e), canvasSize);
     if (!relCoord) return;
     const [x, y] = relCoord;
 
@@ -156,7 +165,7 @@ const ChartCanvas = (prop:ChartCanvasProp) =>{
     if (!canvasSize) return;
 
     if (pointerAnchors[e.pointerId]) {
-      const relCoord = clientCoordToChartCoord(prop, [e.clientX, e.clientY], canvasSize);
+      const relCoord = clientCoordToChartCoord(prop, getOffset(e), canvasSize);
       if (!relCoord) return;
       const [x, y] = relCoord;
 
@@ -214,7 +223,7 @@ const ChartCanvas = (prop:ChartCanvasProp) =>{
       const newVisibleRange: [number,number,number,number] = [newX0, newY0, newX0 + newW, newY0 + newH];
       setVisibleRange(newVisibleRange);
     }
-  }, [canvasSize, pointerAnchors, currentPointers]);
+  }, [pointerAnchors, currentPointers]);
 
   const [xAxisLabelElements, xGridLines] = React.useMemo<[JSX.Element[], JSX.Element[]]>(()=>{
     if (!canvasSize) return [[], []];
@@ -303,8 +312,16 @@ const ChartCanvas = (prop:ChartCanvasProp) =>{
         position: 'relative',
         width: '100%',
         height: '100%',
-        fontSize: '11px'
-      }}>
+        fontSize: '11px',
+        margin: 0, 
+        padding: 0, 
+      }}
+        onWheel={handleWheel}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onDoubleClick={handleDoubleClick}
+      >
       <svg style={{
         position: 'absolute',
         left: `${prop.chartRegion[0] * 100}%`,
@@ -316,11 +333,6 @@ const ChartCanvas = (prop:ChartCanvasProp) =>{
         {yGridLines}
       </svg>
       <Canvas
-        onWheel={handleWheel}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onDoubleClick={handleDoubleClick}
         dpr={1}
         style={{ touchAction: 'none'}}
       >
@@ -339,7 +351,3 @@ const ChartCanvas = (prop:ChartCanvasProp) =>{
 
 export default ChartCanvas;
 
-
-/*
-
-*/

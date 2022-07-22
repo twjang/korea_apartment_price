@@ -49,7 +49,7 @@ export interface SimpleQuestionModalCtxProp {
 
 export const SimpleQuestionModalContext = React.createContext({} as SimpleQuestionModalCtxProp);
 
-export const SimpleQuestionModalProvider: React.FC<{children?:JSX.Element}> = ({children}) => {
+export const SimpleQuestionModalProvider: React.FC<{children?: (JSX.Element | null)[] | JSX.Element }> = ({children}) => {
   const [open, setOpen] = React.useState<boolean>(false);
   const [title, setTitle] = React.useState<JSX.Element | undefined>(undefined);
   const [body, setBody] = React.useState<JSX.Element | undefined>(undefined);

@@ -5,7 +5,6 @@ import { useThree } from '@react-three/fiber';
 import { ShaderMaterial } from 'three';
 import { makeArrayFromNumber } from '../utils';
 import { fromDashType } from '../textureBuilder/fromDashType';
-import { color } from '@mui/system';
 import { useChartViewInfo } from '../utils/ChartViewContext';
 
 
@@ -51,10 +50,9 @@ export const ChartStyledPathGroup = (prop:ChartStyledPathGroupProp)=>{
   const [patternSize, setPatternSize] = React.useState<number | null>(null);
   const shaderRef = React.useRef<ShaderMaterial>(null);
 
-
   React.useEffect(()=>{
     (async () => {
-      const textures = await fromDashType({dash: {pattern: prop.dashType || [5, 5]}});
+      const textures = await fromDashType({dash: {pattern: prop.dashType || [10]}});
       setDashPatternTexture(textures.texture);
       setPatternSize(textures.patternSize['dash']);
     })();
@@ -67,36 +65,29 @@ export const ChartStyledPathGroup = (prop:ChartStyledPathGroupProp)=>{
   }, [prop.color]);
 
 
-  const numPoints = React.useMemo<number>(()=>{
-    let cnt = 0;
+  const [numPoints, numTriangles] = React.useMemo<[number, number]>(()=>{
+    let cntPoints = 0;
+    let cntTriangles = 0;
     prop.paths.forEach(path=>{ 
       if (path.x.length < 2 || path.x.length !== path.y.length)
         return;
-      cnt += path.x.length;
+      cntPoints += path.x.length;
+      cntTriangles += (path.x.length - 1) * 2;
     });
-    return cnt;
+    return [cntPoints, cntTriangles];
   }, [prop.paths]);
 
-  const [usePointSpecificColor, usePathSpecificWidth] = React.useMemo<[boolean, boolean]>(()=>{
-    let useColor = false;
-    let useWidth = false;
-    prop.paths.forEach(path=>{ 
-      if (path.color !== undefined) useColor = true;
-      if (path.width !== undefined) useWidth = true;
-    });
-    return [useColor, useWidth]
-  }, [prop.paths])
      
   const [vertPositions, vertColor, vertWidth, vertTgntA, vertTgntB, vertDirection, cumLenHist, maxCumLenHist, vertIndices, vertPointId] = React.useMemo<[
     Float32Array, Uint8Array, Uint16Array, Float32Array, Float32Array, Uint8Array, Float32Array, number, Uint32Array, Float32Array
   ]>(() => {
     const vertPositions = new Float32Array(numPoints * 6);
-    const vertColor = (usePointSpecificColor)? new Uint8Array(numPoints * 8): new Uint8Array(1);
-    const vertWidth = (usePathSpecificWidth)? new Uint16Array(numPoints * 2): new Uint16Array(1);
+    const vertColor = new Uint8Array(numPoints * 8);
+    const vertWidth = new Uint16Array(numPoints * 2);
     const vertTgntA = new Float32Array(numPoints * 4);
     const vertTgntB = new Float32Array(numPoints * 4);
     const vertDirection = new Uint8Array(numPoints * 2);
-    const vertIndices = new Uint32Array(numPoints * 6);
+    const vertIndices = new Uint32Array(numTriangles * 3);
     const vertPointId = new Float32Array(numPoints * 2);
     const cumLenHist: Float32Array = (()=> {
       const numHistsPerRow = Math.floor(maxTextureWidth / numAngleHist);
@@ -111,6 +102,7 @@ export const ChartStyledPathGroup = (prop:ChartStyledPathGroupProp)=>{
     }
 
     let ptsIdx = 0;
+    let triangleIdx = 0;
     prop.paths.forEach((path)=>{
       if (path.x.length < 2) {
         console.warn('degenerate path (length < 2) detected');
@@ -132,50 +124,46 @@ export const ChartStyledPathGroup = (prop:ChartStyledPathGroupProp)=>{
       let idx6=0;
       let idx8=0;
 
-      if (path.color !== undefined) {
-        if (typeof path.color === 'number') {
-          const [r, g, b, a] = makeArrayFromNumber(path.color);
-          idx8 = 0;
-          for (let i=0; i<path.x.length; i+=4) {
-            vertColor[ptsIdx8 + idx8 + 0] = r;
-            vertColor[ptsIdx8 + idx8 + 1] = g;
-            vertColor[ptsIdx8 + idx8 + 2] = b;
-            vertColor[ptsIdx8 + idx8 + 3] = a;
-            vertColor[ptsIdx8 + idx8 + 4] = r;
-            vertColor[ptsIdx8 + idx8 + 5] = g;
-            vertColor[ptsIdx8 + idx8 + 6] = b;
-            vertColor[ptsIdx8 + idx8 + 7] = a;
-            idx8 += 8;
-          }
-        } else {
-          if (path.x.length * 4 !== path.color.length) {
-            console.warn('errornous color (x.length * 4 !== color.length) detected');
-            return;
-          }
+      if (typeof path.color === 'number' || path.color === undefined) {
+        const [r, g, b, a] = makeArrayFromNumber(path.color || prop.color);
+        idx8 = 0;
+        for (let i=0; i<path.x.length; i++) {
+          vertColor[ptsIdx8 + idx8 + 0] = r;
+          vertColor[ptsIdx8 + idx8 + 1] = g;
+          vertColor[ptsIdx8 + idx8 + 2] = b;
+          vertColor[ptsIdx8 + idx8 + 3] = a;
+          vertColor[ptsIdx8 + idx8 + 4] = r;
+          vertColor[ptsIdx8 + idx8 + 5] = g;
+          vertColor[ptsIdx8 + idx8 + 6] = b;
+          vertColor[ptsIdx8 + idx8 + 7] = a;
+          idx8 += 8;
+        }
+      } else {
+        if (path.x.length * 4 !== path.color.length) {
+          console.warn('errornous color (x.length * 4 !== color.length) detected');
+          return;
+        }
 
-          idx8 = 0;
-          for (let i=0; i<path.color.length; i+=4) {
-            vertColor[ptsIdx8 + idx8 + 0] = path.color[i];
-            vertColor[ptsIdx8 + idx8 + 1] = path.color[i + 1];
-            vertColor[ptsIdx8 + idx8 + 2] = path.color[i + 2];
-            vertColor[ptsIdx8 + idx8 + 3] = path.color[i + 3];
-            vertColor[ptsIdx8 + idx8 + 4] = path.color[i];
-            vertColor[ptsIdx8 + idx8 + 5] = path.color[i + 1];
-            vertColor[ptsIdx8 + idx8 + 6] = path.color[i + 2];
-            vertColor[ptsIdx8 + idx8 + 7] = path.color[i + 3];
-            idx8 += 8;
-          }
+        idx8 = 0;
+        for (let i=0; i<path.color.length; i+=4) {
+          vertColor[ptsIdx8 + idx8 + 0] = path.color[i];
+          vertColor[ptsIdx8 + idx8 + 1] = path.color[i + 1];
+          vertColor[ptsIdx8 + idx8 + 2] = path.color[i + 2];
+          vertColor[ptsIdx8 + idx8 + 3] = path.color[i + 3];
+          vertColor[ptsIdx8 + idx8 + 4] = path.color[i];
+          vertColor[ptsIdx8 + idx8 + 5] = path.color[i + 1];
+          vertColor[ptsIdx8 + idx8 + 6] = path.color[i + 2];
+          vertColor[ptsIdx8 + idx8 + 7] = path.color[i + 3];
+          idx8 += 8;
         }
       }
 
-      if (path.width !== undefined) {
-        const convertedWidth = Math.floor(Math.max(1, Math.min(255.0, path.width)) * 256);
-        idx2 = 0;
-        for (let i=0; i<path.x.length; i++) {
-          vertWidth[ptsIdx2 + idx2] = convertedWidth;
-          vertWidth[ptsIdx2 + idx2 + 1] = convertedWidth;
-          idx2 += 2;
-        }
+      const convertedWidth = Math.floor(Math.max(1, Math.min(255.0, path.width || prop.width)) * 256);
+      idx2 = 0;
+      for (let i=0; i<path.x.length; i++) {
+        vertWidth[ptsIdx2 + idx2] = convertedWidth;
+        vertWidth[ptsIdx2 + idx2 + 1] = convertedWidth;
+        idx2 += 2;
       }
 
       idx2=0;
@@ -252,15 +240,16 @@ export const ChartStyledPathGroup = (prop:ChartStyledPathGroupProp)=>{
       idx2 = 0;
       idx6 = 0;
       for (let i=0; i< (path.x.length - 1); i++) {
-        vertIndices[ptsIdx6 + idx6]     = ptsIdx2 + idx2 + 0;
-        vertIndices[ptsIdx6 + idx6 + 1] = ptsIdx2 + idx2 + 1;
-        vertIndices[ptsIdx6 + idx6 + 2] = ptsIdx2 + idx2 + 2;
-        vertIndices[ptsIdx6 + idx6 + 3] = ptsIdx2 + idx2 + 1;
-        vertIndices[ptsIdx6 + idx6 + 4] = ptsIdx2 + idx2 + 3;
-        vertIndices[ptsIdx6 + idx6 + 5] = ptsIdx2 + idx2 + 2;
+        vertIndices[triangleIdx + idx6]     = ptsIdx2 + idx2 + 0;
+        vertIndices[triangleIdx + idx6 + 1] = ptsIdx2 + idx2 + 1;
+        vertIndices[triangleIdx + idx6 + 2] = ptsIdx2 + idx2 + 2;
+        vertIndices[triangleIdx + idx6 + 3] = ptsIdx2 + idx2 + 1;
+        vertIndices[triangleIdx + idx6 + 4] = ptsIdx2 + idx2 + 3;
+        vertIndices[triangleIdx + idx6 + 5] = ptsIdx2 + idx2 + 2;
         idx2 += 2;
         idx6 += 6;
       }
+      triangleIdx += (path.x.length - 1) * 6;
 
       ptsIdx += path.x.length;
     });
@@ -287,11 +276,10 @@ export const ChartStyledPathGroup = (prop:ChartStyledPathGroupProp)=>{
         uLineWidth: { value: 1.0 },
         uZOffset: {value: 0.0},
         uCanvasSize: { value: new THREE.Vector2(100, 100)},
-        uCanvasSizeInv: { value: new THREE.Vector2(0.01, 0.01)},
         uChartRegionBottomLeft: { value: new THREE.Vector2(-1.0, -1.0)},
         uChartRegionSize: { value: new THREE.Vector2(2.0, 2.0)},
         uVisibleRangeBottomLeft: { value: new THREE.Vector2(-1.0, -1.0) }, // x1, y1, x2, y2
-        uVisibleRangeSizeInv: { value: new THREE.Vector2(0.5, 0.5) }, // 1 / w, 1 / h
+        uVisibleRangeSize: { value: new THREE.Vector2(0.5, 0.5) }, // 1 / w, 1 / h
         uSharedLineColor: { value: new THREE.Vector4(0, 0, 0, 0) }, // RGBA
         uPatternSize: {value: 10},
         uTexture: { value: (()=>{ 
@@ -301,14 +289,13 @@ export const ChartStyledPathGroup = (prop:ChartStyledPathGroupProp)=>{
         })()},
       },
       vertexShader: `
-precision lowp float;
+precision mediump float;
 uniform float uLineWidth;
 uniform float uZOffset;
 uniform vec2 uCanvasSize;
-uniform vec2 uCanvasSizeInv;
 uniform vec2 uChartRegionBottomLeft;
 uniform vec2 uChartRegionSize;
-uniform vec2 uVisibleRangeSizeInv;
+uniform vec2 uVisibleRangeSize;
 uniform vec2 uVisibleRangeBottomLeft;
 uniform vec4 uSharedLineColor;
 
@@ -360,25 +347,24 @@ void main() {
   vPixelLength = 0.0;
   
   float curDir = (direction - 0.5) * 2.0;
-  vec2 widthVec = curLineWidth * uCanvasSizeInv;
 
-  vec2 pts = (position.xy - uVisibleRangeBottomLeft) * uVisibleRangeSizeInv;
-  vec2 corTgntA = normalize(tgntA * uVisibleRangeSizeInv * uChartRegionSize * uCanvasSize);
-  vec2 corTgntB = normalize(tgntB * uVisibleRangeSizeInv * uChartRegionSize * uCanvasSize);
+  vec2 pts = (position.xy - uVisibleRangeBottomLeft) / uVisibleRangeSize;
+  vec2 corTgntA = normalize(tgntA / uVisibleRangeSize * uChartRegionSize * uCanvasSize);
+  vec2 corTgntB = normalize(tgntB / uVisibleRangeSize * uChartRegionSize * uCanvasSize);
   gl_Position.xy = pts * uChartRegionSize + uChartRegionBottomLeft;
   if (tgntA == vec2(0.0, 0.0)) {
-    gl_Position.xy += curLineWidth * normal(corTgntB) * curDir * uCanvasSizeInv;
+    gl_Position.xy += curLineWidth * normal(corTgntB) * curDir / uCanvasSize;
   } else if (tgntB == vec2(0.0, 0.0)){
-    gl_Position.xy += curLineWidth * normal(corTgntA) * curDir * uCanvasSizeInv;
+    gl_Position.xy += curLineWidth * normal(corTgntA) * curDir / uCanvasSize;
   } else {
-    gl_Position.xy += curLineWidth * bevel_edge(corTgntA, corTgntB) * curDir * uCanvasSizeInv;
+    gl_Position.xy += curLineWidth * bevel_edge(corTgntA, corTgntB) * curDir / uCanvasSize;
   }
   gl_Position.zw = vec2(uZOffset, 1.0);
 
    
   for (int i=0; i<${numAngleHist}; i++) {
     float th = float(i) * 1.570796 / ${numAngleHist - 1}.0;
-    vec2 tv = vec2(cos(th), sin(th)) * uVisibleRangeSizeInv * uChartRegionSize * uCanvasSize;
+    vec2 tv = vec2(cos(th), sin(th)) * uChartRegionSize * uCanvasSize / uVisibleRangeSize;
     float rowIdx = floor(pointId / uNumHistsPerRow);
     float colIdx = pointId - rowIdx * uNumHistsPerRow;
     vec2 pidx = (vec2(colIdx * float(${numAngleHist}) + float(i), rowIdx) + 0.5) / 
@@ -387,7 +373,7 @@ void main() {
     vPixelLength += length(tv) * lorig;
   }
 }`,
-      fragmentShader: `precision lowp float;
+      fragmentShader: `precision mediump float;
 
 uniform sampler2D uTexture;
 uniform float uPatternSize;
@@ -419,10 +405,6 @@ void main() {
 
   React.useEffect(()=>{
     if (shaderRef.current) {
-      shaderRef.current.uniforms.uCanvasSizeInv = {value: new THREE.Vector2(
-        1.0 / threeCtx.size.width,
-        1.0 / threeCtx.size.height,
-      )};
       shaderRef.current.uniforms.uCanvasSize = {value: new THREE.Vector2(
         threeCtx.size.width,
         threeCtx.size.height,
@@ -439,9 +421,9 @@ void main() {
   React.useEffect(()=>{
     const visibleRange = chartViewInfo.visibleRange;
     if (shaderRef.current) {
-      shaderRef.current.uniforms.uVisibleRangeSizeInv = {value: new THREE.Vector2(
-        1.0 / Math.abs(visibleRange[2] - visibleRange[0]),
-        1.0 / Math.abs(visibleRange[3] - visibleRange[1]),
+      shaderRef.current.uniforms.uVisibleRangeSize = {value: new THREE.Vector2(
+        Math.abs(visibleRange[2] - visibleRange[0]),
+        Math.abs(visibleRange[3] - visibleRange[1]),
       )};
       shaderRef.current.uniforms.uVisibleRangeBottomLeft = {value: new THREE.Vector2(
         visibleRange[0],
@@ -449,7 +431,7 @@ void main() {
       )}
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [chartViewInfo.visibleRange])
+  }, [shaderRef.current, chartViewInfo.visibleRange])
 
   React.useEffect(()=>{
     const chartRegion = chartViewInfo.chartRegion;
@@ -463,7 +445,7 @@ void main() {
       )}
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [chartViewInfo.chartRegion])
+  }, [shaderRef.current, chartViewInfo.chartRegion])
 
   React.useEffect(()=>{
     if (shaderRef.current) {
@@ -478,7 +460,7 @@ void main() {
       shaderRef.current.uniforms.uZOffset= {value: zOffset};
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [prop.zOrder])
+  }, [shaderRef.current, prop.zOrder])
 
   React.useEffect(()=>{
     if (shaderRef.current) {
@@ -497,20 +479,25 @@ void main() {
       shaderRef.current.uniforms.uNumHistsRows = { value: numHistsRows };
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [prop.paths]);
+  }, [shaderRef.current, prop.paths]);
 
   const meshRef = React.useRef<THREE.Mesh>(null);
-  const geometry = React.useRef<THREE.BufferGeometry>(null);
+  const geometryRef = React.useRef<THREE.BufferGeometry>(null);
+
+  console.log('path', {
+    meshRef,
+    geometryRef
+  })
+
+  if (prop.paths.length === 0) return <></>;
 
   return (
     <mesh ref={meshRef}>
-      <bufferGeometry ref={geometry} >
+      <bufferGeometry ref={geometryRef} >
         <bufferAttribute attach="index" count={vertIndices.length} array={vertIndices} itemSize={1} />
         <bufferAttribute attach="attributes-position" count={vertPositions.length / 3} array={vertPositions} itemSize={3} />
-        {usePointSpecificColor? 
-        <bufferAttribute attach="attributes-color" count={vertColor.length / 4} array={vertColor} itemSize={4} normalized />: <></>}
-        {usePathSpecificWidth? 
-        <bufferAttribute attach="attributes-width" count={vertWidth.length} array={vertWidth} itemSize={1}  normalized />: <></>}
+        <bufferAttribute attach="attributes-color" count={vertColor.length / 4} array={vertColor} itemSize={4} normalized />
+        <bufferAttribute attach="attributes-width" count={vertWidth.length} array={vertWidth} itemSize={1}  normalized />
         <bufferAttribute attach="attributes-tgntA" count={vertTgntA.length / 2} array={vertTgntA} itemSize={2} />
         <bufferAttribute attach="attributes-tgntB" count={vertTgntB.length / 2} array={vertTgntB} itemSize={2} />
         <bufferAttribute attach="attributes-direction" count={vertDirection.length} array={vertDirection} itemSize={1} />

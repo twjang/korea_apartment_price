@@ -39,7 +39,6 @@ const FavAddDialog: React.FC<FavAddDialogProp> = (prop: FavAddDialogProp) => {
         const allSizes = await Promise.all(curAptLst.map(apartId=>{
           return ApartmentService.sizes({ accessToken: authInfo.bearerToken as string, apartId});
         }));
-        console.log(allSizes);
         setAptList(curAptLst);
         setSizes(allSizes.map(e=>{ if (e.result && e.success) return e.result; return []}));
       }

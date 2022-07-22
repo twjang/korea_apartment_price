@@ -151,11 +151,10 @@ export const ChartLineGroup = (prop:ChartLineGroupProp)=>{
         uLineWidth: { value: 1.0 },
         uZOffset: {value: 0.0},
         uCanvasSize: { value: new THREE.Vector2(100, 100)},
-        uCanvasSizeInv: { value: new THREE.Vector2(0.01, 0.01)},
         uChartRegionBottomLeft: { value: new THREE.Vector2(-1.0, -1.0)},
         uChartRegionSize: { value: new THREE.Vector2(2.0, 2.0)},
         uVisibleRangeBottomLeft: { value: new THREE.Vector2(-1.0, -1.0) }, // x1, y1, x2, y2
-        uVisibleRangeSizeInv: { value: new THREE.Vector2(0.5, 0.5) }, // 1 / w, 1 / h
+        uVisibleRangeSize: { value: new THREE.Vector2(0.5, 0.5) }, // 1 / w, 1 / h
         uSharedLineColor: { value: new THREE.Vector4(0, 0, 0, 0) }, // RGBA
         uPatternSize: {value: 10},
         uTexture: { value: (()=>{ 
@@ -165,14 +164,13 @@ export const ChartLineGroup = (prop:ChartLineGroupProp)=>{
         })()},
       },
       vertexShader: `
-precision lowp float;
+precision mediump float;
 uniform float uLineWidth;
 uniform float uZOffset;
 uniform vec2 uCanvasSize;
-uniform vec2 uCanvasSizeInv;
 uniform vec2 uChartRegionBottomLeft;
 uniform vec2 uChartRegionSize;
-uniform vec2 uVisibleRangeSizeInv;
+uniform vec2 uVisibleRangeSize;
 uniform vec2 uVisibleRangeBottomLeft;
 uniform vec4 uSharedLineColor;
 
@@ -244,9 +242,9 @@ void main() {
   // tgnt and normVec are vectors in the same space as pt.
   // That is, to convert them to the NDC, we multiply uChartRegionSize to these vectors.
 
-  vec2 pt   = (position.xy - uVisibleRangeBottomLeft) * uVisibleRangeSizeInv;
-  vec2 tgnt = position.zw * uVisibleRangeSizeInv;
-  vec2 normVec = normal(normalize(tgnt * uChartRegionSize * uCanvasSize)) * curLineWidth * 0.5 * uCanvasSizeInv / uChartRegionSize;  
+  vec2 pt   = (position.xy - uVisibleRangeBottomLeft) / uVisibleRangeSize;
+  vec2 tgnt = position.zw / uVisibleRangeSize;
+  vec2 normVec = normal(normalize(tgnt * uChartRegionSize * uCanvasSize)) * curLineWidth * 0.5 / uCanvasSize / uChartRegionSize;  
 
   vec2 ptCur = pt;
   if (pointId == 0.0 || pointId == 3.0) {
@@ -295,7 +293,7 @@ void main() {
   gl_Position.zw = vec2(uZOffset, 1.0);
 
 }`,
-      fragmentShader: `precision lowp float;
+      fragmentShader: `precision mediump float;
 
 uniform sampler2D uTexture;
 uniform float uPatternSize;
@@ -328,10 +326,6 @@ void main() {
 
   React.useEffect(()=>{
     if (shaderRef.current) {
-      shaderRef.current.uniforms.uCanvasSizeInv = {value: new THREE.Vector2(
-        1.0 / threeCtx.size.width,
-        1.0 / threeCtx.size.height,
-      )};
       shaderRef.current.uniforms.uCanvasSize = {value: new THREE.Vector2(
         threeCtx.size.width,
         threeCtx.size.height,
@@ -343,14 +337,14 @@ void main() {
       shaderRef.current.uniforms.uPatternSize = {value: patternSize};
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [shaderRef.current, threeCtx.size, dashPatternTexture]);
+  }, [threeCtx.size, dashPatternTexture]);
 
   React.useEffect(()=>{
     const visibleRange = chartViewInfo.visibleRange;
     if (shaderRef.current) {
-      shaderRef.current.uniforms.uVisibleRangeSizeInv = {value: new THREE.Vector2(
-        1.0 / Math.abs(visibleRange[2] - visibleRange[0]),
-        1.0 / Math.abs(visibleRange[3] - visibleRange[1]),
+      shaderRef.current.uniforms.uVisibleRangeSize = {value: new THREE.Vector2(
+        Math.abs(visibleRange[2] - visibleRange[0]),
+        Math.abs(visibleRange[3] - visibleRange[1]),
       )};
       shaderRef.current.uniforms.uVisibleRangeBottomLeft = {value: new THREE.Vector2(
         visibleRange[0],
@@ -379,7 +373,7 @@ void main() {
       shaderRef.current.uniforms.uSharedLineColor = {value: sharedLineColor};
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [shaderRef.current, sharedLineColor]);
+  }, [sharedLineColor]);
 
   React.useEffect(()=>{
     if (shaderRef.current) {
@@ -391,6 +385,8 @@ void main() {
 
   const meshRef = React.useRef<THREE.Mesh>(null);
   const geometry = React.useRef<THREE.BufferGeometry>(null);
+
+  if (prop.lines.length === 0) return <></>;
 
   return (
     <mesh ref={meshRef}>

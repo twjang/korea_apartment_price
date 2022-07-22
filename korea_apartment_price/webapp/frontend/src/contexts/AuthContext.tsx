@@ -17,7 +17,7 @@ export type AuthContextProp =
 
 export const AuthContext = React.createContext({} as AuthContextProp);
 
-export const AuthProvider: React.FC<{children?:JSX.Element}> = ({ children }) => {
+export const AuthProvider: React.FC<{ children?: (JSX.Element | null)[] | JSX.Element }> = ({ children }) => {
   const [bearerToken, setBearerToken] = React.useState<string | null>(null);
   const [isAdmin, setIsAdmin] = React.useState<boolean>(true);
   const [isGuest, setIsGuest] = React.useState<boolean>(true);

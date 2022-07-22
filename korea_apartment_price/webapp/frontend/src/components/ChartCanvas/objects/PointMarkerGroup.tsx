@@ -134,23 +134,23 @@ export const ChartPointMarkerGroup = (prop:ChartPointMarkerGroupProp)=>{
       uniforms: {
         uSize: { value: 1.0 },
         uZOffset: {value: 0.0},
-        uCanvasSizeInv: { value: new THREE.Vector2(0.01, 0.01)},
+        uCanvasSize: { value: new THREE.Vector2(100, 100)},
         uChartRegionBottomLeft: { value: new THREE.Vector2(-1.0, -1.0)},
         uChartRegionSize: { value: new THREE.Vector2(2.0, 2.0)},
         uVisibleRangeBottomLeft: { value: new THREE.Vector2(-1.0, -1.0) }, // x1, y1, x2, y2
-        uVisibleRangeSizeInv: { value: new THREE.Vector2(0.5, 0.5) }, // 1 / w, 1 / h
+        uVisibleRangeSize: { value: new THREE.Vector2(2, 2) }, // 1 / w, 1 / h
         uSharedFillColor: { value: new THREE.Vector4(0, 0, 0, 0) }, // RGBA
         uSharedBorderColor: { value: new THREE.Vector4(0, 0, 0, 0) }, // RGBA
         uTexture: { value: new THREE.Texture()},
       },
       vertexShader: `
-precision lowp float;
+precision mediump float;
 uniform float uSize;
 uniform float uZOffset;
-uniform vec2 uCanvasSizeInv;
+uniform vec2 uCanvasSize;
 uniform vec2 uChartRegionBottomLeft;
 uniform vec2 uChartRegionSize;
-uniform vec2 uVisibleRangeSizeInv;
+uniform vec2 uVisibleRangeSize;
 uniform vec2 uVisibleRangeBottomLeft;
 uniform vec4 uSharedFillColor;
 uniform vec4 uSharedBorderColor;
@@ -172,18 +172,18 @@ void main() {
   if (uSharedBorderColor.w > 0.0) vBorderColor = uSharedBorderColor;
   else vBorderColor = borderColor;
   
-  vec2 pts = (position.xy - uVisibleRangeBottomLeft) * uVisibleRangeSizeInv;
+  vec2 pts = (position.xy - uVisibleRangeBottomLeft) / uVisibleRangeSize;
   if (pts.x < 0.0 || pts.x > 1.0 || pts.y < 0.0 || pts.y > 1.0)  {
     gl_Position = vec4(0.0, 0.0, 0.0, 0.0);
     return;
   }
 
   gl_Position.xy = pts * uChartRegionSize + uChartRegionBottomLeft;
-  gl_Position.xy += (uv - vec2(0.5, 0.5)) * uSize * uCanvasSizeInv * 2.0;
+  gl_Position.xy += (uv - vec2(0.5, 0.5)) * uSize * 2.0 / uCanvasSize;
   gl_Position.z = uZOffset;
   gl_Position.w = 1.0;
 }`,
-      fragmentShader: `precision lowp float;
+      fragmentShader: `precision mediump float;
 
 uniform sampler2D uTexture;
 
@@ -211,9 +211,9 @@ void main() {
 
   React.useEffect(()=>{
     if (shaderRef.current) {
-      shaderRef.current.uniforms.uCanvasSizeInv = {value: new THREE.Vector2(
-        1.0 / threeCtx.size.width,
-        1.0 / threeCtx.size.height,
+      shaderRef.current.uniforms.uCanvasSize = {value: new THREE.Vector2(
+        threeCtx.size.width,
+        threeCtx.size.height,
       )};
       if (markerTexture) {
         shaderRef.current.uniforms.uTexture = {value: markerTexture };
@@ -226,9 +226,9 @@ void main() {
   React.useEffect(()=>{
     const visibleRange = chartViewInfo.visibleRange;
     if (shaderRef.current) {
-      shaderRef.current.uniforms.uVisibleRangeSizeInv = {value: new THREE.Vector2(
-        1.0 / Math.abs(visibleRange[2] - visibleRange[0]),
-        1.0 / Math.abs(visibleRange[3] - visibleRange[1]),
+      shaderRef.current.uniforms.uVisibleRangeSize = {value: new THREE.Vector2(
+        Math.abs(visibleRange[2] - visibleRange[0]),
+        Math.abs(visibleRange[3] - visibleRange[1]),
       )};
       shaderRef.current.uniforms.uVisibleRangeBottomLeft = {value: new THREE.Vector2(
         visibleRange[0],
@@ -236,7 +236,7 @@ void main() {
       )}
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [chartViewInfo.visibleRange])
+  }, [shaderRef.current, chartViewInfo.visibleRange])
 
   React.useEffect(()=>{
     const chartRegion = chartViewInfo.chartRegion;
@@ -250,7 +250,7 @@ void main() {
       )}
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [chartViewInfo.chartRegion])
+  }, [shaderRef.current, chartViewInfo.chartRegion])
 
   React.useEffect(()=>{
     if (shaderRef.current) {
@@ -258,7 +258,7 @@ void main() {
       shaderRef.current.uniforms.uZOffset= {value: zOffset};
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [prop.zOrder])
+  }, [shaderRef.current, prop.zOrder])
 
   React.useEffect(()=>{
     if (shaderRef.current) {
@@ -276,6 +276,14 @@ void main() {
 
   const mesh = React.useRef<THREE.Mesh>(null);
   const geometry = React.useRef<THREE.BufferGeometry>(null);
+
+  console.log('point-marker', {
+    mesh,
+    geometry
+  })
+
+  if (prop.x.length === 0 || prop.y.length === 0) return <></>;
+
   return (
     <mesh ref={mesh}>
       <bufferGeometry ref={geometry} >

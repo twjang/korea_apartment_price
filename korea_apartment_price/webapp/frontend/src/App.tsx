@@ -27,10 +27,14 @@ function AppOrig() {
   );
 }
 
-function App() {
-  return <div style={{ width: '1280px', height: '720px', border: '1px solid #000'}}>
-    <ChartDemo />
-   </div>
+function AppDemo() {
+  return (
+    <div style={{width:1280, height:720}}>
+      <ChartDemo />
+    </div>
+  )
 }
+
+const App = AppOrig;
 
 export default App;

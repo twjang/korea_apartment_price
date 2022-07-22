@@ -44,12 +44,13 @@ export const getRouteElements = ():JSX.Element[] => {
       if (e.children) { 
         childrenRoutes.push(...traverse([...parentUrls, e.path], e.children));
       }
-      return (<Route path={e.path} element={<Frame />}>
+      return (<Route key={`route-${parentUrls.join('-')}-${e.path}`} path={e.path} element={<Frame />}>
         {childrenRoutes}
       </Route>);
     })
     if (defaultPage.length > 0) {
       elems.push((<Route
+       key={`defpage-${defaultPage[0].path}`}
         path=""
         element={ <Navigate to={defaultPage[0].path} /> }
       />))

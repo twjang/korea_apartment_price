@@ -2,7 +2,7 @@ from enum import Enum
 from typing import Callable, Optional, List, Tuple, TypedDict, Union, Dict, Any
 
 import datetime
-from pprintpp import pprint
+from pprint import pprint
 import pymongo
 from pymongo import MongoClient
 from pymongo.database import Database
