@@ -8,11 +8,56 @@ import { usePageHierarchyInfo } from '../..';
 import { useAuthInfo } from '../../../contexts/AuthContext';
 import debounce from '../../../misc/debounce';
 import { useNavigate } from 'react-router-dom';
-import ChartCanvas from '../../../components/ChartCanvas';
+import ChartCanvas, { ChartClickEvent, LabelInfo } from '../../../components/ChartCanvas';
 import ChartPointMarkerGroup from '../../../components/ChartCanvas/objects/PointMarkerGroup';
 import ChartDemo from '../../../components/ChartCanvas/demo';
 import ChartLineGroup from '../../../components/ChartCanvas/objects/LineGroup';
 import ChartStyledPathGroup, { Path } from '../../../components/ChartCanvas/objects/StyledPathGroup';
+
+type TradeDetail = {
+  date: string
+  detail: {
+    floor: string
+    price: number
+  }[]
+};
+
+type RentDetail = {
+  date: string
+  detail: {
+    floor: string
+    priceDeposit: number
+    priceRent: number
+    price: number
+  }[]
+};
+
+type OrderbookDetail = {
+  date: string
+  detail: {
+    price: number
+    homes: string[]
+  }[]
+}
+
+const monthlyRentToDeposit = 1 / 4.2 * 100 * 12;
+
+function binarySearch<V, E>(toFind: V, entries: E[], valueFromEntry: (e:E)=>V, cmp:(a:V, b:V)=>number): number {
+  let sidx = 0;
+  let eidx = entries.length;
+  while (eidx - sidx > 1) {
+    let midx = Math.floor((sidx + eidx) / 2);
+    const ment = entries[midx];
+    const compared = cmp(toFind, valueFromEntry(ment));
+    if (compared <= 0) {
+      eidx = midx;
+    } else {
+      sidx = midx;
+    }
+  }
+  return sidx;
+}
+
 
 const Page: React.FC= ()=>{
   const pageInfo = usePageHierarchyInfo();
@@ -24,13 +69,19 @@ const Page: React.FC= ()=>{
   const [rents, setRents] = React.useState<RentHistoryEntry[]| null>(null);
   const [trades, setTrades] = React.useState<TradeHistoryEntry[]| null>(null);
   const [orderbook, setOrderbook] = React.useState<AggregatedOrderbookEntry[] | null>(null);
+
+  const [detailDate, setDetailDate] = React.useState<number | null>(null);
+  const [detailPrice, setDetailPrice] = React.useState<number | null>(null);
+  const [detailDateRange, setDetailDateRange] = React.useState<number | null>(null);
+  const [detailPriceRange, setDetailPriceRange] = React.useState<number | null>(null);
+
   const navigate = useNavigate();
 
   let now = new Date();
   now.setHours(23, 59, 59)
 
   const minDate = (new Date(2011, 0, 1)).getTime() / 1000;
-  const maxDate = now.getTime() / 1000;
+  const maxDate = now.getTime() / 1000 + 1;
   const dateFromTs = new Date(((maxDate - minDate) * dateRangeScale[0] + minDate) * 1000);
   const dateToTs   = new Date(((maxDate - minDate) * dateRangeScale[1] + minDate) * 1000);
   const dateFromSerial = dateFromTs.getFullYear() * 10000 + (1+dateFromTs.getMonth()) * 100 + dateFromTs.getDate();
@@ -61,9 +112,9 @@ const Page: React.FC= ()=>{
         const rents = await ApartmentService.rents({accessToken, apartIdWithSize, dateFrom: dateFromSerial, dateTo: dateToSerial})
         const trades = await ApartmentService.trades({accessToken, apartIdWithSize, dateFrom: dateFromSerial, dateTo: dateToSerial})
         const orderbook = await ApartmentService.orderbook({accessToken, apartIdWithSize, dateFrom: dateFromSerial, dateTo: dateToSerial})
-        if (rents.success && rents.result) { setRents(rents.result); }
-        if (trades.success && trades.result) { setTrades(trades.result); }
-        if (orderbook.success && orderbook.result) { setOrderbook(orderbook.result); }
+        if (rents.success && rents.result) { setRents(rents.result.sort((a, b)=>{ return a.date_serial - b.date_serial; })); }
+        if (trades.success && trades.result) { setTrades(trades.result.sort((a, b)=>{ return a.date_serial - b.date_serial; })); }
+        if (orderbook.success && orderbook.result) { setOrderbook(orderbook.result.sort((a, b)=>{ return parseInt(a.fetched_date) - parseInt(b.fetched_date); })); }
         setIsLoading(false);
       })();
     }
@@ -98,30 +149,67 @@ const Page: React.FC= ()=>{
     return txt
   }
 
-  const dateSerialToDay = (x: number): number => {
+  const dateSerialToDayOffset = (x: number): number => {
     const xString = x.toString();
     const xDate = new Date(`${xString.slice(0, 4)}-${xString.slice(4, 6)}-${xString.slice(6)}`);
     const dateFrom0 = Math.floor(xDate.getTime() / 1000 / 3600 / 24);
     return dateFrom0;
   }
 
-  const [chartTradesX, chartTradesY, minTradesY, maxTradesY] = React.useMemo<[Float32Array | null, Float32Array | null, number, number]>(()=>{
+  const dayOffsetTodateSerial = (x: number): number => {
+    const xDate = new Date(x * 1000 * 3600 * 24);
+    const res = xDate.getFullYear() * 10000 + (xDate.getMonth() + 1) * 100 + xDate.getDate();
+    return res;
+  }
+
+  const dateSerialToString = (x: number): string => {
+    const year = Math.floor(x / 10000)
+    const month= Math.floor(x / 100) % 100;
+    const date = x % 100;
+    return `${year}-${month.toString().padStart(2, '0')}-${date.toString().padStart(2, '0')}`
+  }
+
+
+  const [
+    chartTradesX, chartTradesY, 
+    chartCancelX, chartCancelY, 
+    minTradesY, maxTradesY] = React.useMemo<[
+      Float32Array | null, Float32Array | null, 
+      Float32Array | null, Float32Array | null, 
+      number, number]>(()=>{
+
     let x: Float32Array | null = null;
     let y: Float32Array | null = null;
+    let canceledX: Float32Array | null = null;
+    let canceledY: Float32Array | null = null;
     let minY: number = 0;
     let maxY: number = 1;
 
     if (trades && trades.length > 0) {
-      x = new Float32Array(trades.length);
-      y = new Float32Array(trades.length);
+      const tmpX: number[] = [];
+      const tmpY: number[] = [];
+      const tmpCancelX: number[] = [];
+      const tmpCancelY: number[] = [];
       trades.forEach((e, idx) => {
-        x![idx] = (dateSerialToDay(e.date_serial) - dateSerialToDay(dateFromSerial)) / 30;
-        y![idx] = (e.price / 10000);
-        if (minY === 0 || minY > y![idx]) minY = y![idx];
-        if (maxY === 1 || maxY < y![idx]) maxY = y![idx];
+        const curX = (dateSerialToDayOffset(e.date_serial) - dateSerialToDayOffset(dateFromSerial)) / 30;
+        const curY = (e.price / 10000);
+        if (minY === 0 || minY > curY) minY = curY;
+        if (maxY === 1 || maxY < curY) maxY = curY;
+        if (e.is_canceled) {
+          tmpCancelX.push(curX);
+          tmpCancelY.push(curY);
+        } else {
+          tmpX.push(curX);
+          tmpY.push(curY);
+        }
       })
+
+      x = new Float32Array(tmpX);
+      y = new Float32Array(tmpY);
+      canceledX = new Float32Array(tmpCancelX);
+      canceledY = new Float32Array(tmpCancelY);
     }
-    return [x, y, minY, maxY];
+    return [x, y, canceledX, canceledY, minY, maxY];
   }, [trades]);
 
   const [chartRentsX, chartRentsY, minRentsY, maxRentsY] = React.useMemo<[Float32Array | null, Float32Array | null, number, number]>(()=>{
@@ -134,8 +222,8 @@ const Page: React.FC= ()=>{
       x = new Float32Array(rents.length);
       y = new Float32Array(rents.length);
       rents.forEach((e, idx) => {
-        x![idx] = (dateSerialToDay(e.date_serial) - dateSerialToDay(dateFromSerial)) / 30;
-        y![idx] = (e.price_deposit + (e.price_monthly * 12 / 0.042)) / 10000;
+        x![idx] = (dateSerialToDayOffset(e.date_serial) - dateSerialToDayOffset(dateFromSerial)) / 30;
+        y![idx] = (e.price_deposit + (e.price_monthly * monthlyRentToDeposit)) / 10000;
         if (minY === 0 || minY > y![idx]) minY = y![idx];
         if (maxY === 1 || maxY < y![idx]) maxY = y![idx];
       })
@@ -159,7 +247,7 @@ const Page: React.FC= ()=>{
       });
 
       orderbook.forEach((egroup, idx) => {
-        const x = (dateSerialToDay(parseInt(egroup.fetched_date)) - dateSerialToDay(dateFromSerial)) / 30;
+        const x = (dateSerialToDayOffset(parseInt(egroup.fetched_date)) - dateSerialToDayOffset(dateFromSerial)) / 30;
         egroup.items.forEach(e => {
           const xStart = (prevX !== null)? prevX: x - 1 / 30;
           const xEnd = x;
@@ -168,21 +256,200 @@ const Page: React.FC= ()=>{
           if (minY === 0 || minY > y) minY = y;
           if (maxY === 1 || maxY < y) maxY = y;
           paths.push({
-            x: new Float32Array([xStart-1, xEnd + 1]),
+            x: new Float32Array([xStart, xEnd]),
             y: new Float32Array([y, y]),
-            // color: 0xFF000000 + Math.floor(200 * cnt / maxCnt + 50)
+            color: 0xFF000000 + Math.floor(200 * cnt / maxCnt + 50)
           });
         })
         prevX = x;
       })
     }
-    return [paths.slice(0, 1), minY, maxY];
+    return [paths, minY, maxY];
   }, [orderbook]);
 
+  const detailedTrades = React.useMemo<TradeDetail[]>(()=>{
+    let res: TradeDetail[] = [];
+    if (trades && detailDate && detailPrice && detailDateRange && detailPriceRange) {
+      const idx = binarySearch(detailDate, trades, (e)=>{ return e.date_serial;}, (a, b)=>{return a-b; });
+      const chosenOffset = dateSerialToDayOffset(detailDate);
+      let startIdx = idx;
+      let endIdx = idx;
+
+      while(startIdx > 0) {
+        const curOffset = dateSerialToDayOffset((trades[startIdx-1].date_serial));
+        if (chosenOffset - curOffset < detailDateRange) startIdx --;
+        else break;
+      } 
+
+      while(endIdx < trades.length - 1) {
+        const curOffset = dateSerialToDayOffset((trades[endIdx+1].date_serial));
+        if (curOffset - chosenOffset < detailDateRange) endIdx ++ 
+        else break;
+      } 
+
+      res = [];
+      let curEnt: TradeDetail | null = null;
+      for (let i=startIdx; i<=endIdx; i++) {
+        const curDateStr = dateSerialToString(trades[i].date_serial);
+        const curPrice = trades[i].price / 10000;
+        if (curPrice < detailPrice - detailPriceRange || curPrice > detailPrice + detailPriceRange) continue;
+
+        const curOffset = dateSerialToDayOffset((trades[i].date_serial));
+        if (curOffset < chosenOffset - detailDateRange || curOffset > chosenOffset + detailDateRange) continue;
+
+        if (curEnt === null || (curEnt && curEnt.date !== curDateStr)) {
+          if (curEnt) res.push(curEnt);
+          curEnt = {
+            date: curDateStr,
+            detail: [{ 
+              floor: `${trades[i].floor}층`, 
+              price: parseFloat(curPrice.toFixed(2))
+            }],
+          }
+        } else {
+          curEnt.detail.push({ 
+            floor: `${trades[i].floor}층`, 
+            price: parseFloat((trades[i].price / 10000).toFixed(2))
+          })
+        }
+      }
+      if (curEnt) res.push(curEnt);
+    }
+    return res;
+  }, [detailDate, detailPrice, trades]);
+
+  const detailedRents = React.useMemo<RentDetail[]>(()=>{
+    let res: RentDetail[] = [];
+    if (rents && detailDate && detailPrice && detailDateRange && detailPriceRange) {
+      const idx = binarySearch(detailDate, rents, (e)=>{ return e.date_serial;}, (a, b)=>{return a-b; });
+      const chosenOffset = dateSerialToDayOffset(detailDate);
+      let startIdx = idx;
+      let endIdx = idx;
+
+      while(startIdx > 0) {
+        const curOffset = dateSerialToDayOffset((rents[startIdx-1].date_serial));
+        if (chosenOffset - curOffset < detailDateRange) startIdx --;
+        else break;
+      } 
+
+      while(endIdx < rents.length - 1) {
+        const curOffset = dateSerialToDayOffset((rents[endIdx+1].date_serial));
+        if (curOffset - chosenOffset < detailDateRange) endIdx ++ 
+        else break;
+      } 
+
+      res = [];
+      let curEnt: RentDetail | null = null;
+      for (let i=startIdx; i<=endIdx; i++) {
+        const curDateStr = dateSerialToString(rents[i].date_serial);
+        const curPrice = (rents[i].price_deposit + rents[i].price_monthly * monthlyRentToDeposit) / 10000;
+        if (curPrice < detailPrice - detailPriceRange || curPrice > detailPrice + detailPriceRange) continue;
+
+        const curOffset = dateSerialToDayOffset((rents[i].date_serial));
+        if (curOffset < chosenOffset - detailDateRange || curOffset > chosenOffset + detailDateRange) continue;
+
+        if (curEnt === null || (curEnt && curEnt.date !== curDateStr)) {
+          if (curEnt) res.push(curEnt);
+          curEnt = {
+            date: curDateStr,
+            detail: [{ 
+              floor: `${rents[i].floor}층`, 
+              priceRent: parseFloat(rents[i].price_monthly.toFixed(2)),
+              priceDeposit: parseFloat((rents[i].price_deposit / 10000).toFixed(2)),
+              price: parseFloat(curPrice.toFixed(2)),
+            }],
+          }
+        } else {
+          curEnt.detail.push({ 
+            floor: `${rents[i].floor}층`,
+            priceRent: parseFloat(rents[i].price_monthly.toFixed(2)),
+            priceDeposit: parseFloat((rents[i].price_deposit / 10000).toFixed(2)),
+            price: parseFloat(curPrice.toFixed(2)),
+          })
+        }
+      }
+      if (curEnt) res.push(curEnt);
+    }
+    return res;
+  }, [detailDate, detailPrice, rents]);
+
+  const detailedOrderbook = React.useMemo<OrderbookDetail[]>(()=>{
+    let res: OrderbookDetail[] = [];
+    if (orderbook && detailDate && detailPrice && detailPriceRange) {
+      let idx = binarySearch(detailDate, orderbook, (e)=>{ return parseInt(e.fetched_date);}, (a, b)=>{return a-b; });
+      while (parseInt(orderbook[idx].fetched_date) < detailDate && idx < orderbook.length - 1) idx++;
+
+      const curOrderbook = orderbook[idx];
+      const curDateStr = dateSerialToString(parseInt(curOrderbook.fetched_date));
+
+      if (parseInt(curOrderbook.fetched_date) === detailDate) {
+        const newEnt: OrderbookDetail = {
+          date: curDateStr,
+          detail: [],
+        };
+
+        curOrderbook.items.forEach(e=>{
+          if (e.price < detailPrice - detailPriceRange || e.price > detailPrice + detailPriceRange) return;
+          newEnt.detail.push(e);
+        })
+
+        if (newEnt.detail.length > 0) {
+          res = [newEnt];
+        }
+      }
+    }
+    return res;
+  }, [detailDate, detailPrice, orderbook]);
+
   let minDataX = 0;
-  let maxDataX = (dateSerialToDay(dateToSerial) - dateSerialToDay(dateFromSerial)) / 30;
+  let maxDataX = (dateSerialToDayOffset(dateToSerial) - dateSerialToDayOffset(dateFromSerial)) / 30;
   let minDataY = Math.max(Math.min(minTradesY, minRentsY, minOrderbookY) - 1, 0);
   let maxDataY = Math.max(maxTradesY, maxRentsY, maxOrderbookY) + 1;
+  const startDay = dateSerialToDayOffset(dateFromSerial);
+  const endDay = dateSerialToDayOffset(dateToSerial);
+
+  const xAxisLabelGenerator =(range: [number, number]): LabelInfo[] => {
+    const res: LabelInfo[] = [];
+    const duration = Math.floor((range[1] - range[0]) * 30);
+
+    let interval = 7;
+    if (duration < 60) {
+      interval = 1;
+    } else if (duration < 420) {
+      interval = 7;
+    } else if (duration < 1800) {
+      interval = 30;
+    } else {
+      interval = 30 * 3;
+    }
+
+    const startDayOffset = Math.floor((range[0] * 30));
+    const endDayOffset = endDay - startDay - Math.floor((endDay - startDay - range[1] * 30) / interval) * interval;
+
+    for (let curOffset=endDayOffset; curOffset >= startDayOffset; curOffset-=interval) {
+      const value = curOffset / 30;
+      if (range[0] < value && value < range[1]) {
+        const d = new Date((startDay + curOffset) * 3600 * 24 * 1000);
+        const curDateStr = `${d.getFullYear()}.${(d.getMonth() + 1).toString().padStart(2, '0')}.${d.getDate().toString().padStart(2, '0')}`;
+        res.push({
+          value,
+          label: <span>{curDateStr}</span>,
+          rotation: 90,
+        })
+      }
+    }
+
+    return res;
+  }
+
+  const handleClick=(e:ChartClickEvent)=>{
+    const {x, y, visibleRange} = e;
+    const chosenDay = dayOffsetTodateSerial(Math.round(x * 30) + startDay);
+    setDetailDate(chosenDay);
+    setDetailPrice(y);
+    setDetailDateRange((visibleRange[2] - visibleRange[0]) * 0.025 * 30);
+    setDetailPriceRange((visibleRange[3] - visibleRange[1]) * 0.025);
+  };
 
   return <MUI.Box sx={{ textAlign: 'left' }}>
     <MUI.Button onClick={()=>{ navigate(-1); }}><MUIIcon.ArrowLeft/>돌아가기</MUI.Button>
@@ -209,13 +476,101 @@ const Page: React.FC= ()=>{
     </MUI.Box>
     
     <div style={{
-      width: '100%',
-      height: '80vh'
+      width: 'calc(100% - 2em)',
+      height: 'calc(50vh)'
     }}>
     {(isLoading)?
       (<MUI.CircularProgress />): 
-      (<ChartCanvas chartRegion={[0.1, 0.1, 0.9, 0.9]} dataRange={[minDataX, minDataY, maxDataX, maxDataY]}>
-         
+      (<ChartCanvas 
+        chartRegion={[0.05, 0.05, 0.95, 0.9]} 
+        dataRange={[minDataX, minDataY, maxDataX, maxDataY]}
+        onClick={handleClick}
+        xAxisLabels={xAxisLabelGenerator}>
+          {(chartOrderbookPaths && 
+            <ChartStyledPathGroup
+              paths={chartOrderbookPaths}
+              width={2}
+              color={0xFF0000FF}
+              dashType={[10]}
+              zOrder={2}
+            />)}
+          {(chartTradesX && chartTradesY &&
+            <ChartPointMarkerGroup x={chartTradesX!} y={chartTradesY!} size={10}
+              fillColor={0x0000FFFF}
+              borderColor={0x000000FF}
+              borderWidth={2}
+              zOrder={1}
+              markerType="o" />)}
+          {(chartCancelX && chartCancelY &&
+            <ChartPointMarkerGroup x={chartCancelX!} y={chartCancelY!} size={10}
+              fillColor={0xffae00FF}
+              borderColor={0x000000FF}
+              borderWidth={2}
+              zOrder={1}
+              markerType="x" />)}
+          {(chartRentsX && chartRentsY && 
+            <ChartPointMarkerGroup x={chartRentsX!} y={chartRentsY!} size={10}
+              fillColor={0xFFFF00FF}
+              borderColor={0x000000FF}
+              borderWidth={2}
+              zOrder={0}
+              markerType="triangle" />)}
+        
+      </ChartCanvas>)
+      }
+    </div>
+    <MUI.Box>
+      <MUI.Box>
+        {detailedOrderbook.length > 0 && <MUI.Box>{
+          detailedOrderbook[0].detail.map(de=>{
+            return <MUI.Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'left', flexWrap: 'wrap'}}>
+              <MUI.Typography color="red" sx={{ marginRight: '0.3em'}}>{`${de.price.toFixed(2).replace(/[.]?0*$/,'')}억`}</MUI.Typography>
+              {de.homes.map(h => {
+                return <MUI.Chip variant="outlined" size="small" sx={{margin: '2px'}} label={`${h}`} />
+              })}</MUI.Box>
+          })}
+          <MUI.Typography sx={{ color: '#AAA', fontSize: '10px'}}>{`${detailedOrderbook[0].date}`}</MUI.Typography>
+          </MUI.Box>
+        }
+      </MUI.Box>
+      <MUI.Box>
+        {detailedTrades.length > 0 && <MUI.Box>
+          {detailedTrades.map(t=>{
+            return <MUI.Box>
+            {t.detail.map( de=>{
+            return <MUI.Chip variant="outlined" size="small" sx={{margin:'2px'}} label={<span>
+              <span style={{ color:'blue', marginRight:'3px'}}>{`${de.price.toFixed(2).replace(/[.]?0*$/,'')}억`}</span>
+              {de.floor}
+            </span>} />})}
+            <MUI.Typography sx={{ color: '#AAA', fontSize: '10px'}}>{`${t.date}`}</MUI.Typography>
+            </MUI.Box>
+          })}
+        </MUI.Box>}
+      </MUI.Box>
+      <MUI.Box>
+        {detailedRents.length > 0 && <MUI.Box>
+          {detailedRents.map(t=>{
+            return <MUI.Box>
+            {t.detail.map( de=>{
+            return <MUI.Chip variant="outlined" size="small" sx={{margin:'2px'}} label={<span>
+              <span style={{ color:'#cca700', marginRight:'3px'}}>{`${de.price.toFixed(2).replace(/[.]?0*$/,'')}억`}</span>
+              {de.floor}
+              <span style={{ color:'#AAA', marginLeft:'3px', fontSize: '0.8em'}}>{
+              `${de.priceDeposit.toFixed(2).replace(/[.]?0*$/,'')}억/${de.priceRent}만원`
+              }</span>
+            </span>} />})}
+            <MUI.Typography sx={{ color: '#AAA', fontSize: '10px'}}>{`${t.date}`}</MUI.Typography>
+            </MUI.Box>
+          })}
+        </MUI.Box>}
+
+      </MUI.Box>
+    </MUI.Box>
+  </MUI.Box>
+}
+
+/*
+
           {(chartTradesX && chartTradesY &&
             <ChartPointMarkerGroup x={chartTradesX!} y={chartTradesY!} size={10}
               fillColor={0x0000FFFF}
@@ -223,13 +578,6 @@ const Page: React.FC= ()=>{
               borderWidth={2}
               zOrder={2}
               markerType="o" />)}
-          {(chartRentsX && chartRentsY && 
-            <ChartPointMarkerGroup x={chartRentsX!} y={chartRentsY!} size={10}
-              fillColor={0xFFFF00FF}
-              borderColor={0x000000FF}
-              borderWidth={2}
-              zOrder={1}
-              markerType="triangle" />)}
           {(chartOrderbookPaths && 
             <ChartStyledPathGroup
               paths={chartOrderbookPaths}
@@ -239,25 +587,6 @@ const Page: React.FC= ()=>{
               zOrder={0}
             />)}
         
-      </ChartCanvas>)
-      }
-    </div>
-  </MUI.Box>
-}
-
-/*
-
-
-      (
-        (chartTradesX && chartTradesY) ?
-            <ChartPointMarkerGroup x={chartTradesX!} y={chartTradesY!} size={13}
-              fillColor={0x0000FFFF}
-              borderColor={0x000101FF}
-              borderWidth={1}
-              markerType="o" />
-          </ChartCanvas> : 
-        <></>
-      )
 */
 
 export default Page;

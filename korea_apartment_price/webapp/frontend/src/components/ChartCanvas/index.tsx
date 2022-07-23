@@ -4,6 +4,12 @@ import * as THREE from 'three'
 import { Canvas } from '@react-three/fiber'
 import { ChartViewContext } from "./utils/ChartViewContext";
 
+export type ChartClickEvent = {
+  x: number
+  y: number
+  visibleRange: [number, number, number, number]
+}
+
 export type LabelInfo = {
   value: number
   rotation?: number
@@ -20,6 +26,7 @@ export type ChartCanvasProp = {
   yAxisLabels?: (range:[number, number])=>LabelInfo[]
   gridColor?: string 
   gridWidth?: number
+  onClick?: (e:ChartClickEvent)=>any
 };
 
 const clip = (a: number, b:number, x:number): number =>{
@@ -76,13 +83,13 @@ const defaultLabelGenerator=(range: [number, number]): LabelInfo[] => {
     const value = i * tick;
     res.push({
       value,
-      label: (<>{parseFloat(`${value}`).toPrecision(10).replace(/0*$/, '')}</>)
+      label: (<>{parseFloat(`${value}`).toPrecision(10).replace(/[.]?0*$/, '')}</>)
     })
   }
   return res;
 }
 
-const getOffset = (e: React.PointerEvent | React.WheelEvent): [number, number] => {
+const getOffset = (e: React.PointerEvent | React.WheelEvent | React.MouseEvent): [number, number] => {
   const rect = (e.target as HTMLDivElement).getBoundingClientRect();
   return [e.clientX - rect.x, e.clientY - rect.y];
 }
@@ -91,11 +98,6 @@ const ChartCanvas = (prop:ChartCanvasProp) =>{
   const [visibleRange, setVisibleRange] = React.useState<[number, number, number, number]>(
     (prop.defaultVisibleRange)? prop.defaultVisibleRange: prop.dataRange
   );
-
-  /*
-  const frameRef = React.useRef<HTMLDivElement>(null);
-  const canvasSize: [number, number] | null = (frameRef.current)? [frameRef.current.clientWidth, frameRef.current.clientHeight]: null;
-  */
 
   const [canvasSize, setCanvasSize] = React.useState<[number, number] | null>(null);
   const frameRef = React.useRef<HTMLDivElement>(null);
@@ -121,7 +123,14 @@ const ChartCanvas = (prop:ChartCanvasProp) =>{
     let dy2 = visibleRange[3] - eventCoord[1];
 
     if (e.deltaY < 0) {
-      dx1 *= 0.9; dy1 *= 0.9; dx2 *= 0.9; dy2 *= 0.9;
+      const scale = 0.9
+      if (e.ctrlKey) {
+        dy1 *= scale; dy2 *= scale;
+      } else if (e.shiftKey) {
+        dx1 *= scale; dx2 *= scale; 
+      } else {
+        dx1 *= scale; dy1 *= scale; dx2 *= scale; dy2 *= scale;
+      }
 
       if (prop.maxZoom) {
         const ratioX = prop.maxZoom[0] / (dx2 - dx1);
@@ -130,7 +139,14 @@ const ChartCanvas = (prop:ChartCanvasProp) =>{
         if (ratioY > 1.0) { dy1 *= ratioY; dy2 *= ratioY; }
       }
     } else {
-      dx1 *= 1.1; dy1 *= 1.1; dx2 *= 1.1; dy2 *= 1.1;
+      const scale = 1.1;
+      if (e.ctrlKey) {
+        dy1 *= scale; dy2 *= scale;
+      } else if (e.shiftKey) {
+        dx1 *= scale; dx2 *= scale; 
+      } else {
+        dx1 *= scale; dy1 *= scale; dx2 *= scale; dy2 *= scale;
+      }
     }
 
     const newVisibleRange: [number, number, number, number] = [
@@ -161,6 +177,22 @@ const ChartCanvas = (prop:ChartCanvasProp) =>{
     setVisibleRangeSnapshot(visibleRange);
   }
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (!canvasSize) return;
+
+    if (prop.onClick) {
+
+      const eventCoord = clientCoordToDataCoord(prop, getOffset(e), canvasSize, visibleRange);
+      if (!eventCoord) return;
+
+      prop.onClick({
+        x:eventCoord[0], 
+        y:eventCoord[1],
+        visibleRange
+      });
+    }
+  }
+
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!canvasSize) return;
 
@@ -177,8 +209,9 @@ const ChartCanvas = (prop:ChartCanvasProp) =>{
 
   const handlePointerUp = (e: React.PointerEvent) => {
     if (pointerAnchors[e.pointerId]) {
-      const newPointerAnchors = Object.assign({}, pointerAnchors);
-      delete newPointerAnchors[e.pointerId];
+      const newPointerAnchors = Object.assign({}, currentPointers);
+      if (newPointerAnchors[e.pointerId])
+        delete newPointerAnchors[e.pointerId];
       setPointerAnchors(newPointerAnchors);
     }
 
@@ -214,8 +247,15 @@ const ChartCanvas = (prop:ChartCanvasProp) =>{
       const p21 = pointerAnchors[pointerId2];
       const p22 = currentPointers[pointerId2];
 
-      const newW = clip(prop.maxZoom?.at(0) || 0, prop.dataRange[2] - prop.dataRange[0], Math.abs((visibleRangeSnapshot[2] - visibleRangeSnapshot[0]) * (p21.x - p11.x) / (p22.x - p12.x)));
-      const newH = clip(prop.maxZoom?.at(1) || 0, prop.dataRange[3] - prop.dataRange[1], Math.abs((visibleRangeSnapshot[3] - visibleRangeSnapshot[1]) * (p21.y - p11.y) / (p22.y - p12.y)));
+      const onlyYZoom = Math.abs((p11.x - p12.x)) < 0.1 && Math.abs((p21.x - p22.x)) < 0.1;
+      const onlyXZoom = Math.abs((p11.y - p12.y)) < 0.1 && Math.abs((p21.y - p22.y)) < 0.1;
+      const oldW = visibleRangeSnapshot[2] - visibleRangeSnapshot[0];
+      const oldH = visibleRangeSnapshot[3] - visibleRangeSnapshot[1];
+
+      const newW = (onlyYZoom) ? oldW :
+        clip(prop.maxZoom?.at(0) || 0, prop.dataRange[2] - prop.dataRange[0], Math.abs((visibleRangeSnapshot[2] - visibleRangeSnapshot[0]) * (p21.x - p11.x) / (p22.x - p12.x)));
+      const newH = (onlyXZoom) ? oldH :
+        clip(prop.maxZoom?.at(1) || 0, prop.dataRange[3] - prop.dataRange[1], Math.abs((visibleRangeSnapshot[3] - visibleRangeSnapshot[1]) * (p21.y - p11.y) / (p22.y - p12.y)));
 
       const newX0 = clip(prop.dataRange[0], prop.dataRange[2] - newW, ((p11.x + p21.x) * 0.5 * (visibleRangeSnapshot[2] - visibleRangeSnapshot[0])) - (p12.x + p22.x) * 0.5 * newW + visibleRangeSnapshot[0]);
       const newY0 = clip(prop.dataRange[1], prop.dataRange[3] - newH, ((p11.y + p21.y) * 0.5 * (visibleRangeSnapshot[3] - visibleRangeSnapshot[1])) - (p12.y + p22.y) * 0.5 * newH + visibleRangeSnapshot[1]);
@@ -237,13 +277,6 @@ const ChartCanvas = (prop:ChartCanvasProp) =>{
       const xDiff = canvasSize[0] * (prop.chartRegion[2] - prop.chartRegion[0]) / (visibleRange[2] - visibleRange[0]) * (lblInfo.value - visibleRange[0]);
       let yAnchor = 0;
       let xAnchor = 50;
-      if (angle > 0) {
-        xAnchor = 0;
-        yAnchor = 50;
-      } else if (angle < 0) {
-        xAnchor = 100;
-        yAnchor = 50;
-      }
       elems.push(<HTMLPlacer key={`xaxis-${idx}`} x={xBase + xDiff} y={yBase+5} rotate={angle} xAnchor={xAnchor} yAnchor={yAnchor}>
         {lblInfo.label}
       </HTMLPlacer>);
@@ -274,13 +307,6 @@ const ChartCanvas = (prop:ChartCanvasProp) =>{
       const yDiff = - canvasSize[1] * (prop.chartRegion[3] - prop.chartRegion[1])  * ((lblInfo.value - visibleRange[1])/ (visibleRange[3] - visibleRange[1]));
       let yAnchor = 50;
       let xAnchor = 100;
-      if (angle === 90) {
-        xAnchor = 50;
-        yAnchor = 100;
-      } else if (angle === -90) {
-        xAnchor = 50;
-        yAnchor = 0;
-      } 
 
       elems.push(<HTMLPlacer key={`yaxis-${idx}`} x={xBase-5} y={yBase + yDiff} rotate={angle} xAnchor={xAnchor} yAnchor={yAnchor}>
         {lblInfo.label}
@@ -321,6 +347,7 @@ const ChartCanvas = (prop:ChartCanvasProp) =>{
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onDoubleClick={handleDoubleClick}
+        onClick={handleClick}
       >
       <svg style={{
         position: 'absolute',
@@ -335,6 +362,14 @@ const ChartCanvas = (prop:ChartCanvasProp) =>{
       <Canvas
         dpr={1}
         style={{ touchAction: 'none'}}
+        orthographic
+        // to prevent our prcious objects from being frustum-culled out
+        camera={{
+          left: prop.dataRange[0],
+          bottom: prop.dataRange[1],
+          right: prop.dataRange[2],
+          top: prop.dataRange[3]
+        }}
       >
         <ChartViewContext.Provider value={{
           visibleRange,

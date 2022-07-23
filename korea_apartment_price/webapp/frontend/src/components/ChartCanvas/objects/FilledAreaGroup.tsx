@@ -295,17 +295,16 @@ void main() {
   }, [prop.zOrder])
 
   const meshRef = React.useRef<THREE.Mesh>(null);
-  const geometry = React.useRef<THREE.BufferGeometry>(null);
 
   if (prop.filledArea.length === 0) return (<></>);
 
   return (
     <mesh ref={meshRef}>
-      <bufferGeometry ref={geometry} >
-        <bufferAttribute attach="index" count={vertIndices.length} array={vertIndices} itemSize={1} />
-        <bufferAttribute attach="attributes-position" count={vertPositions.length / 3} array={vertPositions} itemSize={3} />
-        {useVertexColor? 
-        <bufferAttribute attach="attributes-color" count={vertColors.length / 4} array={vertColors} itemSize={4} normalized />: <></>}
+      <bufferGeometry>
+        <bufferAttribute attach="index" count={vertIndices.length} array={vertIndices} itemSize={1}  usage={THREE.DynamicDrawUsage}/>
+        <bufferAttribute attach="attributes-position" count={vertPositions.length / 3} array={vertPositions} itemSize={3}  usage={THREE.DynamicDrawUsage}/>
+        {useVertexColor && 
+        <bufferAttribute attach="attributes-color" count={vertColors.length / 4} array={vertColors} itemSize={4} normalized  usage={THREE.DynamicDrawUsage}/>}
       </bufferGeometry>
       <rawShaderMaterial attach="material" ref={shaderRef} {...shaderData} />
     </mesh>

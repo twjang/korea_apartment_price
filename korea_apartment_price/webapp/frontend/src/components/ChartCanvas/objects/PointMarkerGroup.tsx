@@ -221,7 +221,7 @@ void main() {
       shaderRef.current.uniforms.uSize = {value: prop.size};
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [shaderRef.current, threeCtx.size, markerTexture]);
+  }, [threeCtx.size, markerTexture]);
 
   React.useEffect(()=>{
     const visibleRange = chartViewInfo.visibleRange;
@@ -236,7 +236,7 @@ void main() {
       )}
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [shaderRef.current, chartViewInfo.visibleRange])
+  }, [chartViewInfo.visibleRange])
 
   React.useEffect(()=>{
     const chartRegion = chartViewInfo.chartRegion;
@@ -250,7 +250,7 @@ void main() {
       )}
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [shaderRef.current, chartViewInfo.chartRegion])
+  }, [chartViewInfo.chartRegion])
 
   React.useEffect(()=>{
     if (shaderRef.current) {
@@ -258,42 +258,36 @@ void main() {
       shaderRef.current.uniforms.uZOffset= {value: zOffset};
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [shaderRef.current, prop.zOrder])
+  }, [prop.zOrder])
 
   React.useEffect(()=>{
     if (shaderRef.current) {
       shaderRef.current.uniforms.uSharedFillColor = {value: sharedFillColor};
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [shaderRef.current, prop.fillColor]);
+  }, [sharedFillColor]);
 
   React.useEffect(()=>{
     if (shaderRef.current) {
       shaderRef.current.uniforms.uSharedBorderColor = {value: sharedBorderColor};
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [shaderRef.current, prop.borderColor]);
+  }, [sharedBorderColor]);
 
-  const mesh = React.useRef<THREE.Mesh>(null);
-  const geometry = React.useRef<THREE.BufferGeometry>(null);
-
-  console.log('point-marker', {
-    mesh,
-    geometry
-  })
+  const meshRef = React.useRef<THREE.Mesh>(null);
 
   if (prop.x.length === 0 || prop.y.length === 0) return <></>;
 
   return (
-    <mesh ref={mesh}>
-      <bufferGeometry ref={geometry} >
-        <bufferAttribute attach="index" count={vertIndices.length} array={vertIndices} itemSize={1} />
-        <bufferAttribute attach="attributes-position" count={vertPositions.length / 3} array={vertPositions} itemSize={3} />
-        <bufferAttribute attach="attributes-uv" count={vertUV.length / 2} array={vertUV} itemSize={2} />
-        {useSharedBorderColor?
-        <bufferAttribute attach="attributes-borderColor" count={vertBorderColor.length / 3} array={vertBorderColor} itemSize={3} />: <></>}
-        {useSharedFillColor?
-        <bufferAttribute attach="attributes-fillColor" count={vertFillColor.length / 2} array={vertFillColor} itemSize={2} />: <></>}
+    <mesh ref={meshRef}>
+      <bufferGeometry>
+        <bufferAttribute attach="index" count={vertIndices.length} array={vertIndices} itemSize={1} usage={THREE.DynamicDrawUsage}/>
+        <bufferAttribute attach="attributes-position" count={vertPositions.length / 3} array={vertPositions} itemSize={3}  usage={THREE.DynamicDrawUsage}/>
+        <bufferAttribute attach="attributes-uv" count={vertUV.length / 2} array={vertUV} itemSize={2}  usage={THREE.DynamicDrawUsage}/>
+        {useSharedBorderColor &&
+        <bufferAttribute attach="attributes-borderColor" count={vertBorderColor.length / 3} array={vertBorderColor} itemSize={3}  usage={THREE.DynamicDrawUsage}/>}
+        {useSharedFillColor &&
+        <bufferAttribute attach="attributes-fillColor" count={vertFillColor.length / 2} array={vertFillColor} itemSize={2}  usage={THREE.DynamicDrawUsage}/>}
       </bufferGeometry>
       <rawShaderMaterial attach="material" ref={shaderRef} {...shaderData} />
     </mesh>

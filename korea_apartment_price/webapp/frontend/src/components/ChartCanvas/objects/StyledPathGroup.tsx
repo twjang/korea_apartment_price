@@ -416,7 +416,7 @@ void main() {
       shaderRef.current.uniforms.uPatternSize = {value: patternSize};
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [shaderRef.current, threeCtx.size, dashPatternTexture]);
+  }, [threeCtx.size, dashPatternTexture]);
 
   React.useEffect(()=>{
     const visibleRange = chartViewInfo.visibleRange;
@@ -431,7 +431,7 @@ void main() {
       )}
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [shaderRef.current, chartViewInfo.visibleRange])
+  }, [chartViewInfo.visibleRange])
 
   React.useEffect(()=>{
     const chartRegion = chartViewInfo.chartRegion;
@@ -445,14 +445,14 @@ void main() {
       )}
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [shaderRef.current, chartViewInfo.chartRegion])
+  }, [chartViewInfo.chartRegion])
 
   React.useEffect(()=>{
     if (shaderRef.current) {
       shaderRef.current.uniforms.uSharedLineColor = {value: sharedLineColor};
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [shaderRef.current, sharedLineColor]);
+  }, [sharedLineColor]);
 
   React.useEffect(()=>{
     if (shaderRef.current) {
@@ -460,7 +460,7 @@ void main() {
       shaderRef.current.uniforms.uZOffset= {value: zOffset};
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [shaderRef.current, prop.zOrder])
+  }, [prop.zOrder])
 
   React.useEffect(()=>{
     if (shaderRef.current) {
@@ -479,29 +479,23 @@ void main() {
       shaderRef.current.uniforms.uNumHistsRows = { value: numHistsRows };
       shaderRef.current.uniformsNeedUpdate=true;
     }
-  }, [shaderRef.current, prop.paths]);
+  }, [prop.paths]);
 
   const meshRef = React.useRef<THREE.Mesh>(null);
-  const geometryRef = React.useRef<THREE.BufferGeometry>(null);
-
-  console.log('path', {
-    meshRef,
-    geometryRef
-  })
 
   if (prop.paths.length === 0) return <></>;
 
   return (
     <mesh ref={meshRef}>
-      <bufferGeometry ref={geometryRef} >
-        <bufferAttribute attach="index" count={vertIndices.length} array={vertIndices} itemSize={1} />
-        <bufferAttribute attach="attributes-position" count={vertPositions.length / 3} array={vertPositions} itemSize={3} />
-        <bufferAttribute attach="attributes-color" count={vertColor.length / 4} array={vertColor} itemSize={4} normalized />
-        <bufferAttribute attach="attributes-width" count={vertWidth.length} array={vertWidth} itemSize={1}  normalized />
-        <bufferAttribute attach="attributes-tgntA" count={vertTgntA.length / 2} array={vertTgntA} itemSize={2} />
-        <bufferAttribute attach="attributes-tgntB" count={vertTgntB.length / 2} array={vertTgntB} itemSize={2} />
-        <bufferAttribute attach="attributes-direction" count={vertDirection.length} array={vertDirection} itemSize={1} />
-        <bufferAttribute attach="attributes-pointId" count={vertPointId.length} array={vertPointId} itemSize={1} />
+      <bufferGeometry >
+        <bufferAttribute attach="index" count={vertIndices.length} array={vertIndices} itemSize={1}  usage={THREE.DynamicDrawUsage}/>
+        <bufferAttribute attach="attributes-position" count={vertPositions.length / 3} array={vertPositions} itemSize={3}  usage={THREE.DynamicDrawUsage}/>
+        <bufferAttribute attach="attributes-color" count={vertColor.length / 4} array={vertColor} itemSize={4} normalized  usage={THREE.DynamicDrawUsage}/>
+        <bufferAttribute attach="attributes-width" count={vertWidth.length} array={vertWidth} itemSize={1}  normalized  usage={THREE.DynamicDrawUsage}/>
+        <bufferAttribute attach="attributes-tgntA" count={vertTgntA.length / 2} array={vertTgntA} itemSize={2}  usage={THREE.DynamicDrawUsage}/>
+        <bufferAttribute attach="attributes-tgntB" count={vertTgntB.length / 2} array={vertTgntB} itemSize={2}  usage={THREE.DynamicDrawUsage}/>
+        <bufferAttribute attach="attributes-direction" count={vertDirection.length} array={vertDirection} itemSize={1}  usage={THREE.DynamicDrawUsage}/>
+        <bufferAttribute attach="attributes-pointId" count={vertPointId.length} array={vertPointId} itemSize={1}  usage={THREE.DynamicDrawUsage}/>
       </bufferGeometry>
       <rawShaderMaterial attach="material" ref={shaderRef} {...shaderData} />
     </mesh>

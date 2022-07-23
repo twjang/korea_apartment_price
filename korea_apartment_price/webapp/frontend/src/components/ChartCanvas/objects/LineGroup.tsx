@@ -384,20 +384,19 @@ void main() {
   }, [prop.zOrder])
 
   const meshRef = React.useRef<THREE.Mesh>(null);
-  const geometry = React.useRef<THREE.BufferGeometry>(null);
 
   if (prop.lines.length === 0) return <></>;
 
   return (
     <mesh ref={meshRef}>
-      <bufferGeometry ref={geometry} >
-        <bufferAttribute attach="index" count={vertIndices.length} array={vertIndices} itemSize={1} />
-        <bufferAttribute attach="attributes-position" count={vertPositions.length / 4} array={vertPositions} itemSize={4} />
-        {useLineSpecificColor? 
-        <bufferAttribute attach="attributes-color" count={vertColor.length / 4} array={vertColor} itemSize={4} normalized />: <></>}
-        {useLineSpecificWidth? 
-        <bufferAttribute attach="attributes-width" count={vertWidth.length} array={vertWidth} itemSize={1}  normalized />: <></>}
-        <bufferAttribute attach="attributes-pointId" count={vertPointId.length} array={vertPointId} itemSize={1} />
+      <bufferGeometry>
+        <bufferAttribute attach="index" count={vertIndices.length} array={vertIndices} itemSize={1} usage={THREE.DynamicDrawUsage} />
+        <bufferAttribute attach="attributes-position" count={vertPositions.length / 4} array={vertPositions} itemSize={4}  usage={THREE.DynamicDrawUsage}/>
+        {useLineSpecificColor &&
+        <bufferAttribute attach="attributes-color" count={vertColor.length / 4} array={vertColor} itemSize={4} normalized usage={THREE.DynamicDrawUsage} />}
+        {useLineSpecificWidth &&
+        <bufferAttribute attach="attributes-width" count={vertWidth.length} array={vertWidth} itemSize={1}  normalized usage={THREE.DynamicDrawUsage}/>}
+        <bufferAttribute attach="attributes-pointId" count={vertPointId.length} array={vertPointId} itemSize={1} usage={THREE.DynamicDrawUsage} />
       </bufferGeometry>
       <rawShaderMaterial attach="material" ref={shaderRef} {...shaderData} />
     </mesh>
