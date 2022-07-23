@@ -16,12 +16,12 @@ app = FastAPI()
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request, exc):
-  res = BaseResponse(success=False, msg=exc.detail) 
+  res = BaseResponse(success=False, msg=exc.detail)
   return PlainTextResponse(json.dumps(res, ensure_ascii=False), status_code=exc.status_code)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
-  res = BaseResponse(success=False, msg=str(exc)) 
+  res = BaseResponse(success=False, msg=str(exc))
   return PlainTextResponse(json.dumps(res, ensure_ascii=False), status_code=400)
 
 
@@ -66,5 +66,5 @@ app.include_router(apartment.router, prefix='/api')
 app.include_router(fav.router, prefix='/api')
 
 STATIC_PATH=os.path.realpath(os.path.join(os.path.dirname(__file__), 'static'))
-app.mount("/", StaticFiles(directory=STATIC_PATH), name="static")
+app.mount("/", StaticFiles(directory=STATIC_PATH, html=True), name="static")
 
