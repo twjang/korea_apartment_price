@@ -23,7 +23,16 @@ export const AuthProvider: React.FC<{ children?: (JSX.Element | null)[] | JSX.El
   const [isGuest, setIsGuest] = React.useState<boolean>(true);
   const snackbar = useSnackbar();
 
-  const updateBearerToken = (token: string | null) => {
+  React.useEffect(()=>{
+    const savedToken = localStorage.getItem('token');
+    if (savedToken && !bearerToken) {
+      setBearerToken(savedToken);
+      updateUserFromBearerToken(savedToken);
+    }
+  }, []);
+
+
+  const updateUserFromBearerToken = (token: string | null) => {
     if (token && token !== '') {
       const base64Url = token.split('.')[1];
       const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -44,7 +53,8 @@ export const AuthProvider: React.FC<{ children?: (JSX.Element | null)[] | JSX.El
   const logout = async () => {
     if (bearerToken) {
       setBearerToken(null);
-      updateBearerToken(null);
+      updateUserFromBearerToken(null);
+      localStorage.removeItem('token');
       snackbar.enqueueSnackbar('Logged out successfully', {variant: 'success'});
     }
   }
@@ -56,13 +66,14 @@ export const AuthProvider: React.FC<{ children?: (JSX.Element | null)[] | JSX.El
     } catch(e) { }
 
     if (token) {
+      localStorage.setItem('token', token);
       setBearerToken(token);
-      updateBearerToken(token);
+      updateUserFromBearerToken(token);
       snackbar.enqueueSnackbar('Logged in successfully', {variant: 'success'});
       return true;
     } else {
       setBearerToken(null);
-      updateBearerToken(null);
+      updateUserFromBearerToken(null);
       snackbar.enqueueSnackbar('Login failed', {variant: 'error'});
     }
     return false;

@@ -269,7 +269,7 @@ const Page: React.FC= ()=>{
 
   const detailedTrades = React.useMemo<TradeDetail[]>(()=>{
     let res: TradeDetail[] = [];
-    if (trades && detailDate && detailPrice && detailDateRange && detailPriceRange) {
+    if (trades && trades.length > 0 && detailDate && detailPrice && detailDateRange && detailPriceRange) {
       const idx = binarySearch(detailDate, trades, (e)=>{ return e.date_serial;}, (a, b)=>{return a-b; });
       const chosenOffset = dateSerialToDayOffset(detailDate);
       let startIdx = idx;
@@ -320,7 +320,7 @@ const Page: React.FC= ()=>{
 
   const detailedRents = React.useMemo<RentDetail[]>(()=>{
     let res: RentDetail[] = [];
-    if (rents && detailDate && detailPrice && detailDateRange && detailPriceRange) {
+    if (rents && rents.length > 0 && detailDate && detailPrice && detailDateRange && detailPriceRange) {
       const idx = binarySearch(detailDate, rents, (e)=>{ return e.date_serial;}, (a, b)=>{return a-b; });
       const chosenOffset = dateSerialToDayOffset(detailDate);
       let startIdx = idx;
@@ -375,7 +375,7 @@ const Page: React.FC= ()=>{
 
   const detailedOrderbook = React.useMemo<OrderbookDetail[]>(()=>{
     let res: OrderbookDetail[] = [];
-    if (orderbook && detailDate && detailPrice && detailPriceRange) {
+    if (orderbook && orderbook.length > 0 && detailDate && detailPrice && detailPriceRange) {
       let idx = binarySearch(detailDate, orderbook, (e)=>{ return parseInt(e.fetched_date);}, (a, b)=>{return a-b; });
       while (parseInt(orderbook[idx].fetched_date) < detailDate && idx < orderbook.length - 1) idx++;
 
@@ -492,14 +492,14 @@ const Page: React.FC= ()=>{
               width={2}
               color={0xFF0000FF}
               dashType={[10]}
-              zOrder={2}
+              zOrder={3}
             />)}
           {(chartTradesX && chartTradesY &&
             <ChartPointMarkerGroup x={chartTradesX!} y={chartTradesY!} size={10}
               fillColor={0x0000FFFF}
               borderColor={0x000000FF}
               borderWidth={2}
-              zOrder={1}
+              zOrder={2}
               markerType="o" />)}
           {(chartCancelX && chartCancelY &&
             <ChartPointMarkerGroup x={chartCancelX!} y={chartCancelY!} size={10}
@@ -568,25 +568,5 @@ const Page: React.FC= ()=>{
     </MUI.Box>
   </MUI.Box>
 }
-
-/*
-
-          {(chartTradesX && chartTradesY &&
-            <ChartPointMarkerGroup x={chartTradesX!} y={chartTradesY!} size={10}
-              fillColor={0x0000FFFF}
-              borderColor={0x000000FF}
-              borderWidth={2}
-              zOrder={2}
-              markerType="o" />)}
-          {(chartOrderbookPaths && 
-            <ChartStyledPathGroup
-              paths={chartOrderbookPaths}
-              width={3}
-              color={0xFF0000FF}
-              dashType={[10]}
-              zOrder={0}
-            />)}
-        
-*/
 
 export default Page;
