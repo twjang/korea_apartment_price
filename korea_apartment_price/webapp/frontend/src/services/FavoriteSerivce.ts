@@ -36,7 +36,7 @@ const add = async ({
 }: {
   accessToken: string;
   apartIdWithSize: ApartmentIdWithSize;
-}): Promise<BaseResponse<any>> => {
+}): Promise<BaseResponse<null>> => {
   const caller = new APICaller(API_HOST, accessToken);
   const resp = await caller.call({
     method: 'POST',
@@ -45,7 +45,7 @@ const add = async ({
     isJson: true,
   });
 
-  const respJson = (await resp.json()) as BaseResponse<any>;
+  const respJson = (await resp.json()) as BaseResponse<null>;
   if (resp.status === 200) {
     return respJson;
   } else {
@@ -83,14 +83,14 @@ const remove = async ({
 }: {
   accessToken: string;
   id: number;
-}): Promise<BaseResponse<any>> => {
+}): Promise<BaseResponse<null>> => {
   const caller = new APICaller(API_HOST, accessToken);
   const resp = await caller.call({
     method: 'DELETE',
     path: `/api/fav/${id}`,
   });
 
-  const respJson = (await resp.json()) as BaseResponse<ApartmentIdWithSize>;
+  const respJson = (await resp.json()) as BaseResponse<null>;
   if (resp.status === 200) {
     return respJson;
   } else {

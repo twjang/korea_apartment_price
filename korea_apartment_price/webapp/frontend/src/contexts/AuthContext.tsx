@@ -11,6 +11,16 @@ export type AuthContextProp = {
   register: (email: string, password: string) => Promise<boolean>;
 };
 
+export type JWTAuthInfo = {
+  user: {
+    id: string;
+    email: string;
+    is_admin?: boolean;
+    is_active?: boolean;
+  };
+  exp: number;
+};
+
 export const AuthContext = React.createContext({} as AuthContextProp);
 
 export const AuthProvider: React.FC<{
@@ -21,32 +31,50 @@ export const AuthProvider: React.FC<{
   const [isGuest, setIsGuest] = React.useState<boolean>(true);
   const snackbar = useSnackbar();
 
+  function payloadFromToken<T>(token: string): T | null {
+    const split = token.split('.');
+    if (!split[1]) return null;
+
+    const base64Url = split[1];
+
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      window
+        .atob(base64)
+        .split('')
+        .map(function (c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        })
+        .join('')
+    );
+
+    const parsed = JSON.parse(jsonPayload);
+    return parsed;
+  }
+
   React.useEffect(() => {
     const savedToken = localStorage.getItem('token');
     if (savedToken && !bearerToken) {
-      setBearerToken(savedToken);
-      updateUserFromBearerToken(savedToken);
+      const parsed = payloadFromToken<JWTAuthInfo>(savedToken);
+      if (parsed) {
+        if (new Date().getTime() / 1000 < parsed.exp) {
+          setBearerToken(savedToken);
+          updateUserFromBearerToken(savedToken);
+        }
+      }
     }
   }, []);
 
   const updateUserFromBearerToken = (token: string | null) => {
     if (token && token !== '') {
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(
-        window
-          .atob(base64)
-          .split('')
-          .map(function (c) {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-          })
-          .join('')
-      );
-
-      const parsed = JSON.parse(jsonPayload);
-
-      setIsAdmin(parsed?.user?.is_admin || false);
-      setIsGuest(false);
+      const parsed = payloadFromToken<JWTAuthInfo>(token);
+      if (!parsed) {
+        setIsAdmin(false);
+        setIsGuest(true);
+      } else {
+        setIsAdmin(parsed.user.is_admin || false);
+        setIsGuest(false);
+      }
     } else {
       setIsAdmin(false);
       setIsGuest(true);

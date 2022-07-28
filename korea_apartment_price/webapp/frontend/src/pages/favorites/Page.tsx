@@ -20,6 +20,8 @@ interface FavAddDialogProp {
   handleReload?: () => unknown;
 }
 
+const reloadDelay = 1000;
+
 const FavAddDialog: React.FC<FavAddDialogProp> = (prop: FavAddDialogProp) => {
   const [address, setAddress] = React.useState<string>('');
   const [name, setName] = React.useState<string>('');
@@ -210,6 +212,9 @@ const Page: React.FC = () => {
   const [isAddDialogOpen, setAddDialogOpen] = React.useState<boolean>(false);
   const [favList, setFavList] = React.useState<FavoriteList | null>(null);
   const [isLoading, setIsLoading] = React.useState<boolean>(true);
+  const [scrollPosition, setScrollPosition] = React.useState<number>(
+    window.scrollY
+  );
   const authInfo = useAuthInfo();
   const simpleQuestionModal = useSimpleQuestionModal();
   const navigate = useNavigate();
@@ -226,6 +231,7 @@ const Page: React.FC = () => {
   ];
 
   React.useEffect(() => {
+    setScrollPosition(window.scrollY);
     if (isLoading) {
       (async () => {
         const favs = await FavoriteSerivce.list({
@@ -236,6 +242,9 @@ const Page: React.FC = () => {
         } else {
           setFavList(null);
         }
+        setTimeout(() => {
+          window.scrollTo(0, scrollPosition);
+        }, 500);
         setIsLoading(false);
       })();
     }
@@ -257,7 +266,7 @@ const Page: React.FC = () => {
                   accessToken: authInfo.bearerToken,
                   id,
                 });
-                setIsLoading(true);
+                handleReload();
               }
             })();
           },
@@ -360,7 +369,9 @@ const Page: React.FC = () => {
   };
 
   const handleReload = () => {
-    setIsLoading(true);
+    setTimeout(() => {
+      setIsLoading(true);
+    }, reloadDelay);
   };
 
   return (

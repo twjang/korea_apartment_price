@@ -105,7 +105,7 @@ const info = async ({
     isJson: true,
   });
 
-  const respJson = (await resp.json()) as BaseResponse<number[]>;
+  const respJson = (await resp.json()) as BaseResponse<any>;
   if (resp.status === 200) {
     return respJson;
   } else {
