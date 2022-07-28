@@ -26,7 +26,8 @@
     "start": "BROWSER=none react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "lint": "prettier --write src && eslint . --ext .ts --ext .tsx --fix"
   },
   "eslintConfig": {
     "extends": [
@@ -52,6 +53,10 @@
     "@types/react": "^18.0.14",
     "@types/react-dom": "^18.0.5",
     "@types/three": "^0.141.0",
-    "http-proxy-middleware": "^2.0.6"
+    "@typescript-eslint/eslint-plugin": "^5.31.0",
+    "@typescript-eslint/parser": "^5.31.0",
+    "eslint": "^8.20.0",
+    "http-proxy-middleware": "^2.0.6",
+    "prettier": "2.7.1"
   }
 }

@@ -1,18 +1,20 @@
-import { API_HOST } from "../constants";
-import { ApartmentIdWithSize } from "./ApartmentService";
-import APICaller, { BaseResponse } from "./APICaller";
-
+import { API_HOST } from '../constants';
+import { ApartmentIdWithSize } from './ApartmentService';
+import APICaller, { BaseResponse } from './APICaller';
 
 export type FavoriteList = {
   [key: string]: {
-    id: number,
-    name: string,
-    size: number
-  }[]
+    id: number;
+    name: string;
+    size: number;
+  }[];
 };
 
-
-const list = async ({accessToken}:{accessToken: string}): Promise<BaseResponse<FavoriteList>> => {
+const list = async ({
+  accessToken,
+}: {
+  accessToken: string;
+}): Promise<BaseResponse<FavoriteList>> => {
   const caller = new APICaller(API_HOST, accessToken);
   const resp = await caller.call({
     method: 'GET',
@@ -26,15 +28,21 @@ const list = async ({accessToken}:{accessToken: string}): Promise<BaseResponse<F
     respJson.success = false;
     return respJson;
   }
-}
+};
 
-const add = async ({accessToken, apartIdWithSize}:{accessToken: string, apartIdWithSize: ApartmentIdWithSize}): Promise<BaseResponse<any>> => {
+const add = async ({
+  accessToken,
+  apartIdWithSize,
+}: {
+  accessToken: string;
+  apartIdWithSize: ApartmentIdWithSize;
+}): Promise<BaseResponse<any>> => {
   const caller = new APICaller(API_HOST, accessToken);
   const resp = await caller.call({
     method: 'POST',
     path: '/api/fav/',
     payload: apartIdWithSize,
-    isJson: true
+    isJson: true,
   });
 
   const respJson = (await resp.json()) as BaseResponse<any>;
@@ -44,14 +52,20 @@ const add = async ({accessToken, apartIdWithSize}:{accessToken: string, apartIdW
     respJson.success = false;
     return respJson;
   }
-}
+};
 
-const get = async ({accessToken, id}:{accessToken: string, id: number}): Promise<BaseResponse<ApartmentIdWithSize>> => {
+const get = async ({
+  accessToken,
+  id,
+}: {
+  accessToken: string;
+  id: number;
+}): Promise<BaseResponse<ApartmentIdWithSize>> => {
   const caller = new APICaller(API_HOST, accessToken);
   const resp = await caller.call({
     method: 'GET',
     path: `/api/fav/${id}`,
-    isJson: true
+    isJson: true,
   });
 
   const respJson = (await resp.json()) as BaseResponse<ApartmentIdWithSize>;
@@ -61,9 +75,15 @@ const get = async ({accessToken, id}:{accessToken: string, id: number}): Promise
     respJson.success = false;
     return respJson;
   }
-}
+};
 
-const remove = async ({accessToken, id}:{accessToken: string, id: number}): Promise<BaseResponse<any>> => {
+const remove = async ({
+  accessToken,
+  id,
+}: {
+  accessToken: string;
+  id: number;
+}): Promise<BaseResponse<any>> => {
   const caller = new APICaller(API_HOST, accessToken);
   const resp = await caller.call({
     method: 'DELETE',
@@ -77,13 +97,11 @@ const remove = async ({accessToken, id}:{accessToken: string, id: number}): Prom
     respJson.success = false;
     return respJson;
   }
-}
-
-
+};
 
 export default {
   list,
   add,
   get,
   remove,
-}
+};

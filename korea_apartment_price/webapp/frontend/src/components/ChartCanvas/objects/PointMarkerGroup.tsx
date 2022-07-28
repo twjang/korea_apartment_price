@@ -8,39 +8,45 @@ import { ShaderMaterial } from 'three';
 import { makeArrayFromNumber } from '../utils';
 import { useChartViewInfo } from '../utils/ChartViewContext';
 
-
 export type ChartPointMarkerGroupProp = {
-  x: Float32Array
-  y: Float32Array
-  size: number // size in pixel
-  fillColor: Uint8Array | number // RGBA
-  borderColor?: Uint8Array | number // RGBA
-  borderWidth?: number
-  markerType?: MarkerType
+  x: Float32Array;
+  y: Float32Array;
+  size: number; // size in pixel
+  fillColor: Uint8Array | number; // RGBA
+  borderColor?: Uint8Array | number; // RGBA
+  borderWidth?: number;
+  markerType?: MarkerType;
 } & ChartObjectProp;
 
-export const ChartPointMarkerGroup = (prop:ChartPointMarkerGroupProp)=>{
+export const ChartPointMarkerGroup = (prop: ChartPointMarkerGroupProp) => {
   const threeCtx = useThree();
   const chartViewInfo = useChartViewInfo();
 
   const numPoints = prop.x.length;
-  const [markerTexture, setMarkerTexture] = React.useState<THREE.DataTexture | null>(null);
+  const [markerTexture, setMarkerTexture] =
+    React.useState<THREE.DataTexture | null>(null);
   const shaderRef = React.useRef<ShaderMaterial>(null);
-  const useSharedFillColor = (typeof prop.fillColor === 'number')
-  const useSharedBorderColor = (!prop.borderColor || (typeof prop.borderColor === 'number'));
+  const useSharedFillColor = typeof prop.fillColor === 'number';
+  const useSharedBorderColor =
+    !prop.borderColor || typeof prop.borderColor === 'number';
 
-  React.useEffect(()=>{
+  React.useEffect(() => {
     (async () => {
-      const markerType = (prop.markerType) ? prop.markerType : 'o';
+      const markerType = prop.markerType ? prop.markerType : 'o';
       const svgMarker = getSVGMarker(markerType, {
-        lineWidth: prop.borderWidth, lineColor: '#FF0000', fillColor: '#00FF00', size: prop.size
+        lineWidth: prop.borderWidth,
+        lineColor: '#FF0000',
+        fillColor: '#00FF00',
+        size: prop.size,
       });
-      const textures = await fromSVGs({ 'marker': { svg: svgMarker } });
+      const textures = await fromSVGs({ marker: { svg: svgMarker } });
       setMarkerTexture(textures.texture);
     })();
   }, [prop.markerType, prop.borderWidth]);
 
-  const [sharedFillColor, sharedBorderColor] = React.useMemo<[THREE.Vector4, THREE.Vector4]>(()=>{
+  const [sharedFillColor, sharedBorderColor] = React.useMemo<
+    [THREE.Vector4, THREE.Vector4]
+  >(() => {
     let fillColor = new THREE.Vector4(0.0, 0.0, 0.0, 0.0);
     let borderColor = new THREE.Vector4(0.0, 0.0, 0.0, 0.0);
 
@@ -56,25 +62,34 @@ export const ChartPointMarkerGroup = (prop:ChartPointMarkerGroupProp)=>{
 
     return [fillColor, borderColor];
   }, [prop.fillColor, prop.borderColor]);
-     
-  const [vertPositions, vertUV] = React.useMemo<[Float32Array, Float32Array]>(() => {
-    console.assert(numPoints === prop.y.length, 'y buffer has different length');
+
+  const [vertPositions, vertUV] = React.useMemo<
+    [Float32Array, Float32Array]
+  >(() => {
+    console.assert(
+      numPoints === prop.y.length,
+      'y buffer has different length'
+    );
 
     const vertPositions = new Float32Array(numPoints * 3 * 4);
     const vertUV = new Float32Array(numPoints * 2 * 4);
 
     for (let i = 0; i < numPoints; i++) {
-      let idx8 = i * 8;
-      let idx12 = i * 12;
+      const idx8 = i * 8;
+      const idx12 = i * 12;
       for (let j = 0; j < 12; j += 3) {
         vertPositions[idx12 + j] = prop.x[i];
         vertPositions[idx12 + j + 1] = prop.y[i];
         vertPositions[idx12 + j + 2] = 0;
       }
-      vertUV[idx8 + 0] = 0.0; vertUV[idx8 + 1] = 1.0;
-      vertUV[idx8 + 2] = 1.0; vertUV[idx8 + 3] = 1.0;
-      vertUV[idx8 + 4] = 0.0; vertUV[idx8 + 5] = 0.0;
-      vertUV[idx8 + 6] = 1.0; vertUV[idx8 + 7] = 0.0;
+      vertUV[idx8 + 0] = 0.0;
+      vertUV[idx8 + 1] = 1.0;
+      vertUV[idx8 + 2] = 1.0;
+      vertUV[idx8 + 3] = 1.0;
+      vertUV[idx8 + 4] = 0.0;
+      vertUV[idx8 + 5] = 0.0;
+      vertUV[idx8 + 6] = 1.0;
+      vertUV[idx8 + 7] = 0.0;
     }
     return [vertPositions, vertUV];
   }, [prop.x, prop.y]);
@@ -82,13 +97,16 @@ export const ChartPointMarkerGroup = (prop:ChartPointMarkerGroupProp)=>{
   const vertFillColor = React.useMemo<Uint8Array>(() => {
     const converted = new Uint8Array(numPoints * 16);
     if (typeof prop.fillColor !== 'number')
-      console.assert(numPoints * 4 === prop.fillColor.length, 'fillColor buffer has different length');
+      console.assert(
+        numPoints * 4 === prop.fillColor.length,
+        'fillColor buffer has different length'
+      );
     if (!useSharedFillColor) {
       for (let i = 0; i < numPoints; i++) {
-        let idx16 = i * 16;
-        for (let j=0; j < 16; j+= 4) {
-          for (let k=0; k < 4; k++) {
-            converted[idx16 + j + k] = (prop.fillColor as Uint8Array)[i+k];
+        const idx16 = i * 16;
+        for (let j = 0; j < 16; j += 4) {
+          for (let k = 0; k < 4; k++) {
+            converted[idx16 + j + k] = (prop.fillColor as Uint8Array)[i + k];
           }
         }
       }
@@ -99,13 +117,16 @@ export const ChartPointMarkerGroup = (prop:ChartPointMarkerGroupProp)=>{
   const vertBorderColor = React.useMemo<Uint8Array>(() => {
     const converted = new Uint8Array(numPoints * 16);
     if (typeof prop.borderColor !== 'number' && prop.borderColor)
-      console.assert(numPoints * 4 === prop.borderColor.length, 'fillColor buffer has different length');
+      console.assert(
+        numPoints * 4 === prop.borderColor.length,
+        'fillColor buffer has different length'
+      );
     if (!useSharedBorderColor) {
       for (let i = 0; i < numPoints; i++) {
-        let idx16 = i * 16;
-        for (let j=0; j < 16; j+= 4) {
-          for (let k=0; k < 4; k++) {
-            converted[idx16 + j + k] = (prop.borderColor as Uint8Array)[i+k];
+        const idx16 = i * 16;
+        for (let j = 0; j < 16; j += 4) {
+          for (let k = 0; k < 4; k++) {
+            converted[idx16 + j + k] = (prop.borderColor as Uint8Array)[i + k];
           }
         }
       }
@@ -116,8 +137,8 @@ export const ChartPointMarkerGroup = (prop:ChartPointMarkerGroupProp)=>{
   const vertIndices = React.useMemo<Uint32Array>(() => {
     const vertIndices = new Uint32Array(numPoints * 6);
     for (let i = 0; i < numPoints; i++) {
-      let idx6 = i * 6;
-      let idx4 = i * 4;
+      const idx6 = i * 6;
+      const idx4 = i * 4;
       vertIndices[idx6 + 0] = idx4 + 0;
       vertIndices[idx6 + 1] = idx4 + 2;
       vertIndices[idx6 + 2] = idx4 + 1;
@@ -128,20 +149,20 @@ export const ChartPointMarkerGroup = (prop:ChartPointMarkerGroupProp)=>{
     return vertIndices;
   }, [prop.x, prop.y]);
 
-  const shaderData = React.useMemo(()=>{
+  const shaderData = React.useMemo(() => {
     const data = {
       transparent: true,
       uniforms: {
         uSize: { value: 1.0 },
-        uZOffset: {value: 0.0},
-        uCanvasSize: { value: new THREE.Vector2(100, 100)},
-        uChartRegionBottomLeft: { value: new THREE.Vector2(-1.0, -1.0)},
-        uChartRegionSize: { value: new THREE.Vector2(2.0, 2.0)},
+        uZOffset: { value: 0.0 },
+        uCanvasSize: { value: new THREE.Vector2(100, 100) },
+        uChartRegionBottomLeft: { value: new THREE.Vector2(-1.0, -1.0) },
+        uChartRegionSize: { value: new THREE.Vector2(2.0, 2.0) },
         uVisibleRangeBottomLeft: { value: new THREE.Vector2(-1.0, -1.0) }, // x1, y1, x2, y2
         uVisibleRangeSize: { value: new THREE.Vector2(2, 2) }, // 1 / w, 1 / h
         uSharedFillColor: { value: new THREE.Vector4(0, 0, 0, 0) }, // RGBA
         uSharedBorderColor: { value: new THREE.Vector4(0, 0, 0, 0) }, // RGBA
-        uTexture: { value: new THREE.Texture()},
+        uTexture: { value: new THREE.Texture() },
       },
       vertexShader: `
 precision mediump float;
@@ -203,74 +224,80 @@ void main() {
   } else {
     gl_FragColor = finalColor;
   }
-}`
-
+}`,
     };
     return data;
   }, []);
 
-  React.useEffect(()=>{
+  React.useEffect(() => {
     if (shaderRef.current) {
-      shaderRef.current.uniforms.uCanvasSize = {value: new THREE.Vector2(
-        threeCtx.size.width,
-        threeCtx.size.height,
-      )};
+      shaderRef.current.uniforms.uCanvasSize = {
+        value: new THREE.Vector2(threeCtx.size.width, threeCtx.size.height),
+      };
       if (markerTexture) {
-        shaderRef.current.uniforms.uTexture = {value: markerTexture };
+        shaderRef.current.uniforms.uTexture = { value: markerTexture };
       }
-      shaderRef.current.uniforms.uSize = {value: prop.size};
-      shaderRef.current.uniformsNeedUpdate=true;
+      shaderRef.current.uniforms.uSize = { value: prop.size };
+      shaderRef.current.uniformsNeedUpdate = true;
     }
   }, [threeCtx.size, markerTexture]);
 
-  React.useEffect(()=>{
+  React.useEffect(() => {
     const visibleRange = chartViewInfo.visibleRange;
     if (shaderRef.current) {
-      shaderRef.current.uniforms.uVisibleRangeSize = {value: new THREE.Vector2(
-        Math.abs(visibleRange[2] - visibleRange[0]),
-        Math.abs(visibleRange[3] - visibleRange[1]),
-      )};
-      shaderRef.current.uniforms.uVisibleRangeBottomLeft = {value: new THREE.Vector2(
-        visibleRange[0],
-        visibleRange[1],
-      )}
-      shaderRef.current.uniformsNeedUpdate=true;
+      shaderRef.current.uniforms.uVisibleRangeSize = {
+        value: new THREE.Vector2(
+          Math.abs(visibleRange[2] - visibleRange[0]),
+          Math.abs(visibleRange[3] - visibleRange[1])
+        ),
+      };
+      shaderRef.current.uniforms.uVisibleRangeBottomLeft = {
+        value: new THREE.Vector2(visibleRange[0], visibleRange[1]),
+      };
+      shaderRef.current.uniformsNeedUpdate = true;
     }
-  }, [chartViewInfo.visibleRange])
+  }, [chartViewInfo.visibleRange]);
 
-  React.useEffect(()=>{
+  React.useEffect(() => {
     const chartRegion = chartViewInfo.chartRegion;
     if (shaderRef.current) {
-      shaderRef.current.uniforms.uChartRegionBottomLeft = {value: new THREE.Vector2(
-        chartRegion[0] * 2.0 - 1.0, 1.0 - chartRegion[3] * 2.0
-      )};
-      shaderRef.current.uniforms.uChartRegionSize = {value: new THREE.Vector2(
-        (chartRegion[2] - chartRegion[0]) * 2.0,
-        (chartRegion[3] - chartRegion[1]) * 2.0,
-      )}
-      shaderRef.current.uniformsNeedUpdate=true;
+      shaderRef.current.uniforms.uChartRegionBottomLeft = {
+        value: new THREE.Vector2(
+          chartRegion[0] * 2.0 - 1.0,
+          1.0 - chartRegion[3] * 2.0
+        ),
+      };
+      shaderRef.current.uniforms.uChartRegionSize = {
+        value: new THREE.Vector2(
+          (chartRegion[2] - chartRegion[0]) * 2.0,
+          (chartRegion[3] - chartRegion[1]) * 2.0
+        ),
+      };
+      shaderRef.current.uniformsNeedUpdate = true;
     }
-  }, [chartViewInfo.chartRegion])
+  }, [chartViewInfo.chartRegion]);
 
-  React.useEffect(()=>{
+  React.useEffect(() => {
     if (shaderRef.current) {
-      const zOffset = (prop.zOrder)? 0.5 + 0.45 * Math.tanh(prop.zOrder): 0.5;
-      shaderRef.current.uniforms.uZOffset= {value: zOffset};
-      shaderRef.current.uniformsNeedUpdate=true;
+      const zOffset = prop.zOrder ? 0.5 + 0.45 * Math.tanh(prop.zOrder) : 0.5;
+      shaderRef.current.uniforms.uZOffset = { value: zOffset };
+      shaderRef.current.uniformsNeedUpdate = true;
     }
-  }, [prop.zOrder])
+  }, [prop.zOrder]);
 
-  React.useEffect(()=>{
+  React.useEffect(() => {
     if (shaderRef.current) {
-      shaderRef.current.uniforms.uSharedFillColor = {value: sharedFillColor};
-      shaderRef.current.uniformsNeedUpdate=true;
+      shaderRef.current.uniforms.uSharedFillColor = { value: sharedFillColor };
+      shaderRef.current.uniformsNeedUpdate = true;
     }
   }, [sharedFillColor]);
 
-  React.useEffect(()=>{
+  React.useEffect(() => {
     if (shaderRef.current) {
-      shaderRef.current.uniforms.uSharedBorderColor = {value: sharedBorderColor};
-      shaderRef.current.uniformsNeedUpdate=true;
+      shaderRef.current.uniforms.uSharedBorderColor = {
+        value: sharedBorderColor,
+      };
+      shaderRef.current.uniformsNeedUpdate = true;
     }
   }, [sharedBorderColor]);
 
@@ -281,17 +308,49 @@ void main() {
   return (
     <mesh ref={meshRef}>
       <bufferGeometry>
-        <bufferAttribute attach="index" count={vertIndices.length} array={vertIndices} itemSize={1} usage={THREE.DynamicDrawUsage}/>
-        <bufferAttribute attach="attributes-position" count={vertPositions.length / 3} array={vertPositions} itemSize={3}  usage={THREE.DynamicDrawUsage}/>
-        <bufferAttribute attach="attributes-uv" count={vertUV.length / 2} array={vertUV} itemSize={2}  usage={THREE.DynamicDrawUsage}/>
-        {useSharedBorderColor &&
-        <bufferAttribute attach="attributes-borderColor" count={vertBorderColor.length / 3} array={vertBorderColor} itemSize={3}  usage={THREE.DynamicDrawUsage}/>}
-        {useSharedFillColor &&
-        <bufferAttribute attach="attributes-fillColor" count={vertFillColor.length / 2} array={vertFillColor} itemSize={2}  usage={THREE.DynamicDrawUsage}/>}
+        <bufferAttribute
+          attach="index"
+          count={vertIndices.length}
+          array={vertIndices}
+          itemSize={1}
+          usage={THREE.DynamicDrawUsage}
+        />
+        <bufferAttribute
+          attach="attributes-position"
+          count={vertPositions.length / 3}
+          array={vertPositions}
+          itemSize={3}
+          usage={THREE.DynamicDrawUsage}
+        />
+        <bufferAttribute
+          attach="attributes-uv"
+          count={vertUV.length / 2}
+          array={vertUV}
+          itemSize={2}
+          usage={THREE.DynamicDrawUsage}
+        />
+        {useSharedBorderColor && (
+          <bufferAttribute
+            attach="attributes-borderColor"
+            count={vertBorderColor.length / 3}
+            array={vertBorderColor}
+            itemSize={3}
+            usage={THREE.DynamicDrawUsage}
+          />
+        )}
+        {useSharedFillColor && (
+          <bufferAttribute
+            attach="attributes-fillColor"
+            count={vertFillColor.length / 2}
+            array={vertFillColor}
+            itemSize={2}
+            usage={THREE.DynamicDrawUsage}
+          />
+        )}
       </bufferGeometry>
       <rawShaderMaterial attach="material" ref={shaderRef} {...shaderData} />
     </mesh>
   );
-}
+};
 
 export default ChartPointMarkerGroup;

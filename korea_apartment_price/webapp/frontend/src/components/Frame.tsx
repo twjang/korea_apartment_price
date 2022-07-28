@@ -1,5 +1,5 @@
-import React from 'react'
-import { PageConfig, PageInfo, rootPageConfig, usePageHierarchyInfo } from '../pages';
+import React from 'react';
+import { PageInfo, usePageHierarchyInfo } from '../pages';
 import { styled, useTheme, Theme, CSSObject } from '@mui/material/styles';
 import Box from '@mui/material/Box';
 import MuiDrawer from '@mui/material/Drawer';
@@ -17,10 +17,8 @@ import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
-import InboxIcon from '@mui/icons-material/MoveToInbox';
-import MailIcon from '@mui/icons-material/Mail';
 import { useAuthInfo } from '../contexts/AuthContext';
-import { Link, matchPath, Navigate, useLocation, useRoutes, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { Button } from '@mui/material';
 
 const drawerWidth = 240;
@@ -77,30 +75,29 @@ const AppBar = styled(MuiAppBar, {
   }),
 }));
 
-const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' })(
-  ({ theme, open }) => ({
-    width: drawerWidth,
-    flexShrink: 0,
-    whiteSpace: 'nowrap',
-    boxSizing: 'border-box',
-    ...(open && {
-      ...openedMixin(theme),
-      '& .MuiDrawer-paper': openedMixin(theme),
-    }),
-    ...(!open && {
-      ...closedMixin(theme),
-      '& .MuiDrawer-paper': closedMixin(theme),
-    }),
+const Drawer = styled(MuiDrawer, {
+  shouldForwardProp: (prop) => prop !== 'open',
+})(({ theme, open }) => ({
+  width: drawerWidth,
+  flexShrink: 0,
+  whiteSpace: 'nowrap',
+  boxSizing: 'border-box',
+  ...(open && {
+    ...openedMixin(theme),
+    '& .MuiDrawer-paper': openedMixin(theme),
   }),
-);
+  ...(!open && {
+    ...closedMixin(theme),
+    '& .MuiDrawer-paper': closedMixin(theme),
+  }),
+}));
 
-const Frame: React.FC<{}> = ({})=>{
+const Frame: React.FC = () => {
   const theme = useTheme();
   const [open, setOpen] = React.useState(false);
   const authInfo = useAuthInfo();
   const pageInfo = usePageHierarchyInfo();
   const navigate = useNavigate();
-
 
   const handleDrawerOpen = () => {
     setOpen(true);
@@ -116,16 +113,22 @@ const Frame: React.FC<{}> = ({})=>{
     } else {
       authInfo.logout();
     }
-  }
+  };
 
-  const hasNoPermission = (pageInfo.matchedPageInfo?.notForGuest && authInfo.isGuest) || (pageInfo.matchedPageInfo?.onlyForAdmin && !authInfo.isAdmin);
+  const hasNoPermission =
+    (pageInfo.matchedPageInfo?.notForGuest && authInfo.isGuest) ||
+    (pageInfo.matchedPageInfo?.onlyForAdmin && !authInfo.isAdmin);
   if (hasNoPermission && pageInfo.loginPageInfo) {
-    return <Navigate to={pageInfo.loginPageInfo?.fullPath} />
+    return <Navigate to={pageInfo.loginPageInfo?.fullPath} />;
   }
 
   const menuItems: JSX.Element[] = [];
-  const generateMenuItems = (parentPaths:string[], depth: number, cfg:PageInfo[]) =>{
-    cfg.forEach(e=>{
+  const generateMenuItems = (
+    parentPaths: string[],
+    depth: number,
+    cfg: PageInfo[]
+  ) => {
+    cfg.forEach((e) => {
       let needToDraw = true;
       if (e.menuIcon && e.menuName) {
         if (e.onlyForAdmin && !authInfo.isAdmin) {
@@ -142,11 +145,29 @@ const Frame: React.FC<{}> = ({})=>{
         const itemUrl = e.fullPath;
         const item = (
           <ListItem key={itemUrl} disablePadding sx={{ display: 'block' }}>
-            <ListItemButton sx={{ minHeight: 48, justifyContent: open ? 'initial' : 'center', px: 2.5, }} selected={isSelected} component={Link} to={itemUrl} >
-              <ListItemIcon sx={{ minWidth: 0, mr: open ? 3 : 'auto', justifyContent: 'center', }}>
+            <ListItemButton
+              sx={{
+                minHeight: 48,
+                justifyContent: open ? 'initial' : 'center',
+                px: 2.5,
+              }}
+              selected={isSelected}
+              component={Link}
+              to={itemUrl}
+            >
+              <ListItemIcon
+                sx={{
+                  minWidth: 0,
+                  mr: open ? 3 : 'auto',
+                  justifyContent: 'center',
+                }}
+              >
                 {e.menuIcon}
               </ListItemIcon>
-              <ListItemText primary={e.menuName} sx={{ opacity: open ? 1 : 0 }} />
+              <ListItemText
+                primary={e.menuName}
+                sx={{ opacity: open ? 1 : 0 }}
+              />
             </ListItemButton>
           </ListItem>
         );
@@ -173,33 +194,38 @@ const Frame: React.FC<{}> = ({})=>{
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{flexGrow: 1, textAlign:'left'}}>
+          <Typography
+            variant="h6"
+            noWrap
+            component="div"
+            sx={{ flexGrow: 1, textAlign: 'left' }}
+          >
             {pageInfo?.matchedPageInfo?.title}
           </Typography>
-          <Button
-            color="inherit"
-            onClick={handleLoginLogout}>
-              {(authInfo.isGuest?"Login":"Logout")}
+          <Button color="inherit" onClick={handleLoginLogout}>
+            {authInfo.isGuest ? 'Login' : 'Logout'}
           </Button>
         </Toolbar>
       </AppBar>
       <Drawer variant="permanent" open={open}>
         <DrawerHeader>
           <IconButton onClick={handleDrawerClose}>
-            {theme.direction === 'rtl' ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+            {theme.direction === 'rtl' ? (
+              <ChevronRightIcon />
+            ) : (
+              <ChevronLeftIcon />
+            )}
           </IconButton>
         </DrawerHeader>
         <Divider />
-        <List>
-          {menuItems}
-        </List>
+        <List>{menuItems}</List>
       </Drawer>
       <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
         <DrawerHeader />
-          {pageInfo?.matchedPageInfo?.element}
+        {pageInfo?.matchedPageInfo?.element}
       </Box>
     </Box>
   );
-}
+};
 
 export default Frame;

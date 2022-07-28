@@ -7,15 +7,14 @@ import { makeArrayFromNumber } from '../utils';
 import { fromDashType } from '../textureBuilder/fromDashType';
 import { useChartViewInfo } from '../utils/ChartViewContext';
 
-
 export type Line = {
-  x: number
-  y: number
-  dx: number
-  dy: number
-  color?: number // Override the default color. repeated [r, g, b, a] values.
-  width?: number // Override the default width. max 255.
-}
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+  color?: number; // Override the default color. repeated [r, g, b, a] values.
+  width?: number; // Override the default width. max 255.
+};
 
 export type ChartLineGroupProp = {
   lines: Line[];
@@ -24,24 +23,25 @@ export type ChartLineGroupProp = {
   dashType?: number[];
 } & ChartObjectProp;
 
-
-
-export const ChartLineGroup = (prop:ChartLineGroupProp)=>{
-  const [dashPatternTexture, setDashPatternTexture] = React.useState<THREE.DataTexture | null>(null);
+export const ChartLineGroup = (prop: ChartLineGroupProp) => {
+  const [dashPatternTexture, setDashPatternTexture] =
+    React.useState<THREE.DataTexture | null>(null);
   const [patternSize, setPatternSize] = React.useState<number | null>(null);
   const threeCtx = useThree();
   const shaderRef = React.useRef<ShaderMaterial>(null);
   const chartViewInfo = useChartViewInfo();
 
-  React.useEffect(()=>{
+  React.useEffect(() => {
     (async () => {
-      const textures = await fromDashType({dash: {pattern: prop.dashType || [15, 10]}});
+      const textures = await fromDashType({
+        dash: { pattern: prop.dashType || [15, 10] },
+      });
       setDashPatternTexture(textures.texture);
       setPatternSize(textures.patternSize['dash']);
     })();
   }, [prop.dashType]);
 
-  const sharedLineColor = React.useMemo<THREE.Vector4>(()=>{
+  const sharedLineColor = React.useMemo<THREE.Vector4>(() => {
     const t = makeArrayFromNumber(prop.color, 1.0 / 255.0);
     const fillColor = new THREE.Vector4(t[0], t[1], t[2], t[3]);
     return fillColor;
@@ -64,104 +64,112 @@ export const ChartLineGroup = (prop:ChartLineGroupProp)=>{
 
   */
 
-  const [useLineSpecificColor, useLineSpecificWidth] = React.useMemo<[boolean, boolean]>(()=>{
+  const [useLineSpecificColor, useLineSpecificWidth] = React.useMemo<
+    [boolean, boolean]
+  >(() => {
     let useColor = false;
     let useWidth = false;
-    prop.lines.forEach(line=>{ 
+    prop.lines.forEach((line) => {
       if (line.color !== undefined) useColor = true;
       if (line.width !== undefined) useWidth = true;
     });
-    return [useColor, useWidth]
-  }, [prop.lines])
-     
-  const [vertPositions, vertColor, vertWidth, vertPointId, vertIndices] = React.useMemo<[
-    Float32Array, Uint8Array, Uint16Array, Float32Array, Uint32Array
-  ]>(() => {
-    const vertPositions = new Float32Array(numLines * 4 * 4);
-    const vertColor = (useLineSpecificColor)? new Uint8Array(numLines * 4 * 4): new Uint8Array(1);
-    const vertWidth = (useLineSpecificWidth)? new Uint16Array(numLines * 4): new Uint16Array(1);
-    const vertPointId = new Float32Array(numLines * 4);
-    const vertIndices = new Uint32Array(numLines * 6);
+    return [useColor, useWidth];
+  }, [prop.lines]);
 
-    let idx4=0;
-    let idx6=0;
-    let idx16=0;
+  const [vertPositions, vertColor, vertWidth, vertPointId, vertIndices] =
+    React.useMemo<
+      [Float32Array, Uint8Array, Uint16Array, Float32Array, Uint32Array]
+    >(() => {
+      const vertPositions = new Float32Array(numLines * 4 * 4);
+      const vertColor = useLineSpecificColor
+        ? new Uint8Array(numLines * 4 * 4)
+        : new Uint8Array(1);
+      const vertWidth = useLineSpecificWidth
+        ? new Uint16Array(numLines * 4)
+        : new Uint16Array(1);
+      const vertPointId = new Float32Array(numLines * 4);
+      const vertIndices = new Uint32Array(numLines * 6);
 
-    for (let i=0; i<numLines; i++) {
-      const curLine = prop.lines[i];
+      let idx4 = 0;
+      let idx6 = 0;
+      let idx16 = 0;
 
-      vertPointId[idx4] = 0;
-      vertPointId[idx4 + 1] = 1;
-      vertPointId[idx4 + 2] = 2;
-      vertPointId[idx4 + 3] = 3;
+      for (let i = 0; i < numLines; i++) {
+        const curLine = prop.lines[i];
 
-      const curX = curLine.x;
-      const curY = curLine.y;
-      let curdX  = curLine.dx;
-      let curdY  = curLine.dy;
+        vertPointId[idx4] = 0;
+        vertPointId[idx4 + 1] = 1;
+        vertPointId[idx4 + 2] = 2;
+        vertPointId[idx4 + 3] = 3;
 
-      if (curdX > 0.0) {
-        curdX = -curdX;
-        curdY = -curdY;
-      } 
+        const curX = curLine.x;
+        const curY = curLine.y;
+        let curdX = curLine.dx;
+        let curdY = curLine.dy;
 
-      for (let j=0; j<16; j+=4) {
-        vertPositions[idx16 + j]     = curX;
-        vertPositions[idx16 + j + 1] = curY;
-        vertPositions[idx16 + j + 2] = curdX;
-        vertPositions[idx16 + j + 3] = curdY;
-      }
-
-      if (curLine.color !== undefined) {
-        const curColor = makeArrayFromNumber(curLine.color);
-        for (let j=0; j<16; j+=4) {
-          vertColor[idx16 + j]     = curColor[0];
-          vertColor[idx16 + j + 1] = curColor[1];
-          vertColor[idx16 + j + 2] = curColor[2];
-          vertColor[idx16 + j + 3] = curColor[3];
+        if (curdX > 0.0) {
+          curdX = -curdX;
+          curdY = -curdY;
         }
-      }
 
-      if (curLine.width !== undefined) {
-        for (let j=0; j<4; j++) {
-          vertWidth[idx4 + j] = curLine.width * 256;
+        for (let j = 0; j < 16; j += 4) {
+          vertPositions[idx16 + j] = curX;
+          vertPositions[idx16 + j + 1] = curY;
+          vertPositions[idx16 + j + 2] = curdX;
+          vertPositions[idx16 + j + 3] = curdY;
         }
+
+        if (curLine.color !== undefined) {
+          const curColor = makeArrayFromNumber(curLine.color);
+          for (let j = 0; j < 16; j += 4) {
+            vertColor[idx16 + j] = curColor[0];
+            vertColor[idx16 + j + 1] = curColor[1];
+            vertColor[idx16 + j + 2] = curColor[2];
+            vertColor[idx16 + j + 3] = curColor[3];
+          }
+        }
+
+        if (curLine.width !== undefined) {
+          for (let j = 0; j < 4; j++) {
+            vertWidth[idx4 + j] = curLine.width * 256;
+          }
+        }
+
+        vertIndices[idx6] = idx4 + 0;
+        vertIndices[idx6 + 1] = idx4 + 2;
+        vertIndices[idx6 + 2] = idx4 + 1;
+        vertIndices[idx6 + 3] = idx4 + 3;
+        vertIndices[idx6 + 4] = idx4 + 2;
+        vertIndices[idx6 + 5] = idx4 + 0;
+
+        idx4 += 4;
+        idx6 += 6;
+        idx16 += 16;
       }
 
-      vertIndices[idx6    ] = idx4 + 0;
-      vertIndices[idx6 + 1] = idx4 + 2;
-      vertIndices[idx6 + 2] = idx4 + 1;
-      vertIndices[idx6 + 3] = idx4 + 3;
-      vertIndices[idx6 + 4] = idx4 + 2;
-      vertIndices[idx6 + 5] = idx4 + 0;
+      return [vertPositions, vertColor, vertWidth, vertPointId, vertIndices];
+    }, [prop.lines, numLines]);
 
-      idx4 += 4;
-      idx6 += 6;
-      idx16 += 16;
-    }
-
-    return [vertPositions, vertColor, vertWidth, vertPointId, vertIndices];
-  }, [prop.lines, numLines]);
-
-
-  const shaderData = React.useMemo(()=>{
+  const shaderData = React.useMemo(() => {
     const data = {
       transparent: true,
       uniforms: {
         uLineWidth: { value: 1.0 },
-        uZOffset: {value: 0.0},
-        uCanvasSize: { value: new THREE.Vector2(100, 100)},
-        uChartRegionBottomLeft: { value: new THREE.Vector2(-1.0, -1.0)},
-        uChartRegionSize: { value: new THREE.Vector2(2.0, 2.0)},
+        uZOffset: { value: 0.0 },
+        uCanvasSize: { value: new THREE.Vector2(100, 100) },
+        uChartRegionBottomLeft: { value: new THREE.Vector2(-1.0, -1.0) },
+        uChartRegionSize: { value: new THREE.Vector2(2.0, 2.0) },
         uVisibleRangeBottomLeft: { value: new THREE.Vector2(-1.0, -1.0) }, // x1, y1, x2, y2
         uVisibleRangeSize: { value: new THREE.Vector2(0.5, 0.5) }, // 1 / w, 1 / h
         uSharedLineColor: { value: new THREE.Vector4(0, 0, 0, 0) }, // RGBA
-        uPatternSize: {value: 10},
-        uTexture: { value: (()=>{ 
-          const texture = new THREE.Texture(); 
-          texture.needsUpdate = true;
-          return texture; 
-        })()},
+        uPatternSize: { value: 10 },
+        uTexture: {
+          value: (() => {
+            const texture = new THREE.Texture();
+            texture.needsUpdate = true;
+            return texture;
+          })(),
+        },
       },
       vertexShader: `
 precision mediump float;
@@ -318,70 +326,74 @@ void main() {
   gl_FragColor.xyz = vLineColor.xyz;
   gl_FragColor.w = vLineColor.w * chosenColor.w;
   // gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
-}`
-
+}`,
     };
     return data;
   }, []);
 
-  React.useEffect(()=>{
+  React.useEffect(() => {
     if (shaderRef.current) {
-      shaderRef.current.uniforms.uCanvasSize = {value: new THREE.Vector2(
-        threeCtx.size.width,
-        threeCtx.size.height,
-      )};
+      shaderRef.current.uniforms.uCanvasSize = {
+        value: new THREE.Vector2(threeCtx.size.width, threeCtx.size.height),
+      };
       if (dashPatternTexture) {
-        shaderRef.current.uniforms.uTexture = {value: dashPatternTexture };
+        shaderRef.current.uniforms.uTexture = { value: dashPatternTexture };
       }
-      shaderRef.current.uniforms.uLineWidth = {value: prop.width};
-      shaderRef.current.uniforms.uPatternSize = {value: patternSize};
-      shaderRef.current.uniformsNeedUpdate=true;
+      shaderRef.current.uniforms.uLineWidth = { value: prop.width };
+      shaderRef.current.uniforms.uPatternSize = { value: patternSize };
+      shaderRef.current.uniformsNeedUpdate = true;
     }
   }, [threeCtx.size, dashPatternTexture]);
 
-  React.useEffect(()=>{
+  React.useEffect(() => {
     const visibleRange = chartViewInfo.visibleRange;
     if (shaderRef.current) {
-      shaderRef.current.uniforms.uVisibleRangeSize = {value: new THREE.Vector2(
-        Math.abs(visibleRange[2] - visibleRange[0]),
-        Math.abs(visibleRange[3] - visibleRange[1]),
-      )};
-      shaderRef.current.uniforms.uVisibleRangeBottomLeft = {value: new THREE.Vector2(
-        visibleRange[0],
-        visibleRange[1],
-      )}
-      shaderRef.current.uniformsNeedUpdate=true;
+      shaderRef.current.uniforms.uVisibleRangeSize = {
+        value: new THREE.Vector2(
+          Math.abs(visibleRange[2] - visibleRange[0]),
+          Math.abs(visibleRange[3] - visibleRange[1])
+        ),
+      };
+      shaderRef.current.uniforms.uVisibleRangeBottomLeft = {
+        value: new THREE.Vector2(visibleRange[0], visibleRange[1]),
+      };
+      shaderRef.current.uniformsNeedUpdate = true;
     }
-  }, [chartViewInfo.visibleRange])
+  }, [chartViewInfo.visibleRange]);
 
-  React.useEffect(()=>{
+  React.useEffect(() => {
     const chartRegion = chartViewInfo.chartRegion;
     if (shaderRef.current) {
-      shaderRef.current.uniforms.uChartRegionBottomLeft = {value: new THREE.Vector2(
-        chartRegion[0] * 2.0 - 1.0, 1.0 - chartRegion[3] * 2.0
-      )};
-      shaderRef.current.uniforms.uChartRegionSize = {value: new THREE.Vector2(
-        (chartRegion[2] - chartRegion[0]) * 2.0,
-        (chartRegion[3] - chartRegion[1]) * 2.0,
-      )}
-      shaderRef.current.uniformsNeedUpdate=true;
+      shaderRef.current.uniforms.uChartRegionBottomLeft = {
+        value: new THREE.Vector2(
+          chartRegion[0] * 2.0 - 1.0,
+          1.0 - chartRegion[3] * 2.0
+        ),
+      };
+      shaderRef.current.uniforms.uChartRegionSize = {
+        value: new THREE.Vector2(
+          (chartRegion[2] - chartRegion[0]) * 2.0,
+          (chartRegion[3] - chartRegion[1]) * 2.0
+        ),
+      };
+      shaderRef.current.uniformsNeedUpdate = true;
     }
-  }, [chartViewInfo.chartRegion])
+  }, [chartViewInfo.chartRegion]);
 
-  React.useEffect(()=>{
+  React.useEffect(() => {
     if (shaderRef.current) {
-      shaderRef.current.uniforms.uSharedLineColor = {value: sharedLineColor};
-      shaderRef.current.uniformsNeedUpdate=true;
+      shaderRef.current.uniforms.uSharedLineColor = { value: sharedLineColor };
+      shaderRef.current.uniformsNeedUpdate = true;
     }
   }, [sharedLineColor]);
 
-  React.useEffect(()=>{
+  React.useEffect(() => {
     if (shaderRef.current) {
-      const zOffset = (prop.zOrder)? 0.5 + 0.45 * Math.tanh(prop.zOrder): 0.5;
-      shaderRef.current.uniforms.uZOffset= {value: zOffset};
-      shaderRef.current.uniformsNeedUpdate=true;
+      const zOffset = prop.zOrder ? 0.5 + 0.45 * Math.tanh(prop.zOrder) : 0.5;
+      shaderRef.current.uniforms.uZOffset = { value: zOffset };
+      shaderRef.current.uniformsNeedUpdate = true;
     }
-  }, [prop.zOrder])
+  }, [prop.zOrder]);
 
   const meshRef = React.useRef<THREE.Mesh>(null);
 
@@ -390,17 +402,51 @@ void main() {
   return (
     <mesh ref={meshRef}>
       <bufferGeometry>
-        <bufferAttribute attach="index" count={vertIndices.length} array={vertIndices} itemSize={1} usage={THREE.DynamicDrawUsage} />
-        <bufferAttribute attach="attributes-position" count={vertPositions.length / 4} array={vertPositions} itemSize={4}  usage={THREE.DynamicDrawUsage}/>
-        {useLineSpecificColor &&
-        <bufferAttribute attach="attributes-color" count={vertColor.length / 4} array={vertColor} itemSize={4} normalized usage={THREE.DynamicDrawUsage} />}
-        {useLineSpecificWidth &&
-        <bufferAttribute attach="attributes-width" count={vertWidth.length} array={vertWidth} itemSize={1}  normalized usage={THREE.DynamicDrawUsage}/>}
-        <bufferAttribute attach="attributes-pointId" count={vertPointId.length} array={vertPointId} itemSize={1} usage={THREE.DynamicDrawUsage} />
+        <bufferAttribute
+          attach="index"
+          count={vertIndices.length}
+          array={vertIndices}
+          itemSize={1}
+          usage={THREE.DynamicDrawUsage}
+        />
+        <bufferAttribute
+          attach="attributes-position"
+          count={vertPositions.length / 4}
+          array={vertPositions}
+          itemSize={4}
+          usage={THREE.DynamicDrawUsage}
+        />
+        {useLineSpecificColor && (
+          <bufferAttribute
+            attach="attributes-color"
+            count={vertColor.length / 4}
+            array={vertColor}
+            itemSize={4}
+            normalized
+            usage={THREE.DynamicDrawUsage}
+          />
+        )}
+        {useLineSpecificWidth && (
+          <bufferAttribute
+            attach="attributes-width"
+            count={vertWidth.length}
+            array={vertWidth}
+            itemSize={1}
+            normalized
+            usage={THREE.DynamicDrawUsage}
+          />
+        )}
+        <bufferAttribute
+          attach="attributes-pointId"
+          count={vertPointId.length}
+          array={vertPointId}
+          itemSize={1}
+          usage={THREE.DynamicDrawUsage}
+        />
       </bufferGeometry>
       <rawShaderMaterial attach="material" ref={shaderRef} {...shaderData} />
     </mesh>
   );
-}
+};
 
 export default ChartLineGroup;

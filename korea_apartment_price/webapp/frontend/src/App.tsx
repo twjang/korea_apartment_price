@@ -6,18 +6,15 @@ import { SnackbarProvider } from 'notistack';
 import { SimpleQuestionModalProvider } from './components/SimpleQuestionModal';
 import ChartDemo from './components/ChartCanvas/demo';
 
-
 function AppOrig() {
   return (
-    <div className='App'>
+    <div className="App">
       <SimpleQuestionModalProvider>
         <BrowserRouter>
           <SnackbarProvider maxSnack={5}>
             <AuthProvider>
               <PageHierarchyProvider>
-                <Routes>
-                  {getRouteElements()}
-                </Routes>
+                <Routes>{getRouteElements()}</Routes>
               </PageHierarchyProvider>
             </AuthProvider>
           </SnackbarProvider>
@@ -29,10 +26,10 @@ function AppOrig() {
 
 function AppDemo() {
   return (
-    <div style={{width:1280, height:720}}>
+    <div style={{ width: 1280, height: 720 }}>
       <ChartDemo />
     </div>
-  )
+  );
 }
 
 const App = AppOrig;

@@ -1,10 +1,10 @@
 import * as qs from 'qs';
 import * as React from 'react';
-import * as MUI from '@mui/material'
+import * as MUI from '@mui/material';
 import { useAuthInfo } from '../../contexts/AuthContext';
 import { Navigate, useLocation } from 'react-router-dom';
 
-const Page: React.FC= ()=>{
+const Page: React.FC = () => {
   const [inProgress, setInProgress] = React.useState<boolean>(false);
   const emailRef = React.useRef<HTMLInputElement>(null);
   const passwordRef = React.useRef<HTMLInputElement>(null);
@@ -14,7 +14,7 @@ const Page: React.FC= ()=>{
   const queries = qs.parse(locInfo.search);
   const nextUrl = (queries.next || '/').toString();
 
-  const handleSubmit = ()=>{
+  const handleSubmit = () => {
     setInProgress(true);
     (async () => {
       if (emailRef.current && passwordRef.current) {
@@ -36,18 +36,18 @@ const Page: React.FC= ()=>{
         passwordRef.current.focus();
       }
     }
-  }
+  };
 
-  const handlePasswordKeyDown = (e:React.KeyboardEvent)=>{
+  const handlePasswordKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       if (formRef.current) {
         formRef.current.requestSubmit();
       }
     }
-  }
+  };
 
   if (!authInfo.isGuest) {
-    return (<Navigate to={nextUrl}/>) 
+    return <Navigate to={nextUrl} />;
   }
 
   return (
@@ -59,20 +59,49 @@ const Page: React.FC= ()=>{
         display: 'flex',
         flexDirection: 'column',
         '& .MuiButton-root': { m: 1 },
-      }}>
-      <form 
+      }}
+    >
+      <form
         name="login"
-        ref={formRef} 
+        ref={formRef}
         method="POST"
-        onSubmit={(e: React.FormEvent)=>{e.preventDefault(); handleSubmit(); }}
-        noValidate>
-      <MUI.TextField inputRef={emailRef} name="username" label="E-mail" size="small"  disabled={inProgress} onKeyDown={handleEmailKeyDown}/>
-      <MUI.TextField inputRef={passwordRef} name="password" label="Password" size="small" type="password" autoComplete="current-password" disabled={inProgress} onKeyDown={handlePasswordKeyDown}/>
-      <MUI.Button variant="contained" disabled={inProgress} onClick={()=>{ if (formRef.current) formRef.current.requestSubmit(); }}>Login</MUI.Button>
+        onSubmit={(e: React.FormEvent) => {
+          e.preventDefault();
+          handleSubmit();
+        }}
+        noValidate
+      >
+        <MUI.TextField
+          inputRef={emailRef}
+          name="username"
+          label="E-mail"
+          size="small"
+          disabled={inProgress}
+          onKeyDown={handleEmailKeyDown}
+        />
+        <MUI.TextField
+          inputRef={passwordRef}
+          name="password"
+          label="Password"
+          size="small"
+          type="password"
+          autoComplete="current-password"
+          disabled={inProgress}
+          onKeyDown={handlePasswordKeyDown}
+        />
+        <MUI.Button
+          variant="contained"
+          disabled={inProgress}
+          onClick={() => {
+            if (formRef.current) formRef.current.requestSubmit();
+          }}
+        >
+          Login
+        </MUI.Button>
       </form>
       <MUI.Button disabled={inProgress}>Register</MUI.Button>
     </MUI.Box>
-  )
-}
+  );
+};
 
 export default Page;
