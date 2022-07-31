@@ -166,10 +166,10 @@ def remove_rent_entries_from_db(ymregions: List[Tuple[int, int, int]]):
 
 
 def fetch_and_insert(arg: Tuple[int, int, int]):
-  year, month, location_code = arg
+  year, month, region_code = arg
   ymd_code = year * 100 + month
 
-  fname = f'{year:04d}{month:02d}-{location_code}.json'
+  fname = f'{year:04d}{month:02d}-{region_code}.json'
   fpath = os.path.join(RENT_DATA_ROOT, fname)
 
   os.makedirs(RENT_DATA_ROOT, exist_ok=True)
@@ -177,17 +177,20 @@ def fetch_and_insert(arg: Tuple[int, int, int]):
   data = None
 
   if not os.path.exists(fpath):
+    print(f'fetching {ymd_code}-{region_code}')
     while data is None:
       try:
         time.sleep(0.1)
-        data = dn.get(ymd_code, location_code)
+        data = dn.get(ymd_code, region_code)
       except requests.exceptions.Timeout:
         pass
 
-    with open(fpath, 'w') as f:
-      content = json.dumps(data, ensure_ascii=False)
-      f.write(content)
+    if len(data) > 0:
+      with open(fpath, 'w') as f:
+        content = json.dumps(data, ensure_ascii=False)
+        f.write(content)
   else:
+    print(f'loading {ymd_code}-{region_code}')
     with open(fpath, 'r') as f:
       data = json.loads(f.read())
 

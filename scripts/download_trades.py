@@ -196,6 +196,7 @@ def fetch_and_insert(arg: Tuple[int, int, int]):
   data = None
 
   if not os.path.exists(fpath):
+    print(f'fetching {ymd_code}-{region_code}')
     while data is None:
       try:
         time.sleep(0.1)
@@ -203,10 +204,12 @@ def fetch_and_insert(arg: Tuple[int, int, int]):
       except requests.exceptions.Timeout:
         pass
 
-    with open(fpath, 'w') as f:
-      content = json.dumps(data, ensure_ascii=False)
-      f.write(content)
+    if len(data) > 0:
+      with open(fpath, 'w') as f:
+        content = json.dumps(data, ensure_ascii=False)
+        f.write(content)
   else:
+    print(f'loading {ymd_code}-{region_code}')
     with open(fpath, 'r') as f:
       data = json.loads(f.read())
 
