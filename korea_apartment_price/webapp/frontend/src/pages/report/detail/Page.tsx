@@ -18,7 +18,6 @@ import ChartCanvas, {
   LabelInfo,
 } from '../../../components/ChartCanvas';
 import ChartPointMarkerGroup from '../../../components/ChartCanvas/objects/PointMarkerGroup';
-import ChartDemo from '../../../components/ChartCanvas/demo';
 import ChartStyledPathGroup, {
   Path,
 } from '../../../components/ChartCanvas/objects/StyledPathGroup';
@@ -50,6 +49,7 @@ type OrderbookDetail = {
 };
 
 const monthlyRentToDeposit = (1 / 4.2) * 100 * 12;
+const currentOrderbookLineLengthPortion = 0.01;
 
 function binarySearch<V, E>(
   toFind: V,
@@ -334,10 +334,14 @@ const Page: React.FC = () => {
     return [x, y, minY, maxY];
   }, [rents]);
 
-  const [chartOrderbookPaths, minOrderbookY, maxOrderbookY] = React.useMemo<
-    [Path[], number, number]
-  >(() => {
+  const [
+    chartOrderbookPaths,
+    chartLatestOrderbookPaths,
+    minOrderbookY,
+    maxOrderbookY,
+  ] = React.useMemo<[Path[], Path[], number, number]>(() => {
     const paths: Path[] = [];
+    const latestPaths: Path[] = [];
     let minY = 0;
     let maxY = 1;
 
@@ -356,6 +360,10 @@ const Page: React.FC = () => {
           (dateSerialToDayOffset(parseInt(egroup.fetched_date)) -
             dateSerialToDayOffset(dateFromSerial)) /
           30;
+        const isLatest =
+          dateSerialToDayOffset(dateToSerial) -
+            dateSerialToDayOffset(parseInt(egroup.fetched_date)) <
+          5;
         egroup.items.forEach((e) => {
           const xStart = prevX !== null ? prevX : x - 1 / 30;
           const xEnd = x;
@@ -369,10 +377,26 @@ const Page: React.FC = () => {
             color: 0xff000000 + Math.floor((200 * cnt) / maxCnt + 50),
           });
         });
+
+        if (isLatest) {
+          egroup.items.forEach((e) => {
+            const xStart = x;
+            const xEnd = x * (1 + currentOrderbookLineLengthPortion);
+            const y = e.price;
+            const cnt = e.homes.length;
+            if (minY === 0 || minY > y) minY = y;
+            if (maxY === 1 || maxY < y) maxY = y;
+            latestPaths.push({
+              x: new Float32Array([xStart, xEnd]),
+              y: new Float32Array([y, y]),
+              color: 0x00bd1f00 + Math.floor((200 * cnt) / maxCnt + 50),
+            });
+          });
+        }
         prevX = x;
       });
     }
-    return [paths, minY, maxY];
+    return [paths, latestPaths, minY, maxY];
   }, [orderbook]);
 
   const detailedTrades = React.useMemo<TradeDetail[]>(() => {
@@ -574,7 +598,7 @@ const Page: React.FC = () => {
         parseInt(curOrderbook.fetched_date)
       );
 
-      if (parseInt(curOrderbook.fetched_date) === detailDate) {
+      if (parseInt(curOrderbook.fetched_date) <= detailDate) {
         const newEnt: OrderbookDetail = {
           date: curDateStr,
           detail: [],
@@ -639,9 +663,12 @@ const Page: React.FC = () => {
       const value = curOffset / 30;
       if (range[0] < value && value < range[1]) {
         const d = new Date((startDay + curOffset) * 3600 * 24 * 1000);
-        const curDateStr = `${d.getFullYear()}.${(d.getMonth() + 1)
-          .toString()
-          .padStart(2, '0')}.${d.getDate().toString().padStart(2, '0')}`;
+        const curDateStr =
+          value <= maxDataX
+            ? `${d.getFullYear()}.${(d.getMonth() + 1)
+                .toString()
+                .padStart(2, '0')}.${d.getDate().toString().padStart(2, '0')}`
+            : 'Latest';
         res.push({
           value,
           label: <span>{curDateStr}</span>,
@@ -655,7 +682,9 @@ const Page: React.FC = () => {
 
   const handleClick = (e: ChartClickEvent) => {
     const { x, y, visibleRange } = e;
-    const chosenDay = dayOffsetTodateSerial(Math.round(x * 30) + startDay);
+    const chosenDay = dayOffsetTodateSerial(
+      Math.round(Math.min(maxDataX, x) * 30) + startDay
+    );
     setDetailDate(chosenDay);
     setDetailPrice(y);
     setDetailDateRange((visibleRange[2] - visibleRange[0]) * 0.025 * 30);
@@ -721,10 +750,24 @@ const Page: React.FC = () => {
         ) : (
           <ChartCanvas
             chartRegion={[0.05, 0.05, 0.95, 0.9]}
-            dataRange={[minDataX, minDataY, maxDataX, maxDataY]}
+            dataRange={[
+              minDataX,
+              minDataY,
+              maxDataX * (1 + currentOrderbookLineLengthPortion),
+              maxDataY,
+            ]}
             onClick={handleClick}
             xAxisLabels={xAxisLabelGenerator}
           >
+            {chartLatestOrderbookPaths && (
+              <ChartStyledPathGroup
+                paths={chartLatestOrderbookPaths}
+                width={2}
+                color={0x00bd1fff}
+                dashType={[10]}
+                zOrder={4}
+              />
+            )}
             {chartOrderbookPaths && (
               <ChartStyledPathGroup
                 paths={chartOrderbookPaths}

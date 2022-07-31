@@ -69,7 +69,7 @@ const DenseTable: React.FC<DenseTableProp> = (prop: DenseTableProp) => {
                     key={`${idx}-${colidx}`}
                     align={e.align}
                     width={e.width}
-                    sx={e.headSx}
+                    sx={e.sx}
                   >
                     {row[e.field]}
                   </TableCell>

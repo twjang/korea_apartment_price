@@ -1,4 +1,4 @@
-const timers: Record<string, any> = {};
+const timers: Record<string, number> = {};
 
 const debounce = (
   eventName: string,
@@ -7,7 +7,10 @@ const debounce = (
 ) => {
   return () => {
     if (timers[eventName]) clearTimeout(timers[eventName]);
-    timers[eventName] = setTimeout(() => callback(), delay);
+    timers[eventName] = setTimeout(
+      () => callback(),
+      delay
+    ) as unknown as number;
   };
 };
 

@@ -212,12 +212,29 @@ const Page: React.FC = () => {
   const [isAddDialogOpen, setAddDialogOpen] = React.useState<boolean>(false);
   const [favList, setFavList] = React.useState<FavoriteList | null>(null);
   const [isLoading, setIsLoading] = React.useState<boolean>(true);
-  const [scrollPosition, setScrollPosition] = React.useState<number>(
-    window.scrollY
-  );
   const authInfo = useAuthInfo();
   const simpleQuestionModal = useSimpleQuestionModal();
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    const onScroll = debounce(
+      'fav-scrollUpdate',
+      () => {
+        localStorage.setItem('fav-scroll', window.scrollY.toString());
+      },
+      500
+    );
+    window.addEventListener('scroll', onScroll);
+
+    if (!isLoading) {
+      const scrollYStr = localStorage.getItem('fav-scroll');
+      if (scrollYStr) {
+        window.scrollTo(0, parseFloat(scrollYStr));
+      }
+    }
+
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [isLoading]);
 
   const columns = [
     {
@@ -226,12 +243,13 @@ const Page: React.FC = () => {
       sx: {
         display: 'flow',
         flowDirection: 'row',
+        padding: 0,
+        margin: 0,
       },
     },
   ];
 
   React.useEffect(() => {
-    setScrollPosition(window.scrollY);
     if (isLoading) {
       (async () => {
         const favs = await FavoriteSerivce.list({
@@ -242,9 +260,6 @@ const Page: React.FC = () => {
         } else {
           setFavList(null);
         }
-        setTimeout(() => {
-          window.scrollTo(0, scrollPosition);
-        }, 500);
         setIsLoading(false);
       })();
     }
@@ -258,7 +273,7 @@ const Page: React.FC = () => {
       ),
       choices: [
         {
-          button: <span>삭제</span>,
+          button: <span style={{ fontWeight: 'bold' }}>삭제</span>,
           handler: () => {
             (async () => {
               if (authInfo.bearerToken) {
@@ -278,28 +293,71 @@ const Page: React.FC = () => {
     });
   };
 
-  const rows: Record<string, any>[] = [];
+  const rows: { entry: JSX.Element }[] = [];
 
   if (favList) {
+    const addrNameToIdSize: Record<string, number[][]> = {};
+    const addrGroupToAptEnt: Record<
+      string,
+      { addrRemainder: string; name: string; idSizes: number[][] }[]
+    > = {};
+
     Object.keys(favList).forEach((address) => {
-      const curNameToIdSize: Record<string, number[][]> = {};
       favList[address].forEach((e) => {
-        if (!curNameToIdSize[e.name]) {
-          curNameToIdSize[e.name] = [];
+        const key = `${address}/${e.name}`;
+
+        if (!addrNameToIdSize[key]) {
+          addrNameToIdSize[key] = [];
         }
-        curNameToIdSize[e.name].push([e.id, e.size]);
+        addrNameToIdSize[key].push([e.id, e.size]);
+      });
+    });
+
+    Object.keys(addrNameToIdSize).forEach((addressName) => {
+      const [address, name] = addressName.split('/');
+      const addrSplit = address.split(' ');
+      const addrGroup = addrSplit.slice(0, 2).join(' ');
+      const addrRemainder = addrSplit.slice(2).join(' ');
+      if (!addrGroupToAptEnt[addrGroup]) {
+        addrGroupToAptEnt[addrGroup] = [];
+      }
+      addrGroupToAptEnt[addrGroup].push({
+        addrRemainder,
+        name,
+        idSizes: addrNameToIdSize[addressName],
+      });
+    });
+
+    Object.keys(addrGroupToAptEnt).forEach((addrGroup) => {
+      const curAptEntList = addrGroupToAptEnt[addrGroup];
+      rows.push({
+        entry: (
+          <MUI.Box
+            sx={{
+              px: 1,
+              py: 1,
+              background: '#EEE',
+            }}
+          >
+            <MUI.Typography sx={{ fontWeight: 'bold' }}>
+              {addrGroup}
+            </MUI.Typography>
+          </MUI.Box>
+        ),
       });
 
-      const curRows = Object.keys(curNameToIdSize).map((curName) => {
-        const idSizeList = curNameToIdSize[curName];
+      const curRows = curAptEntList.map((e) => {
+        const idSizeList = e.idSizes;
         return {
           entry: (
             <MUI.Box
               sx={{
                 my: 2,
+                mx: 2,
                 display: 'flex',
                 flexDirection: 'row',
                 justifyContent: 'space-between',
+                alignItems: 'center',
               }}
             >
               <MUI.Typography
@@ -307,11 +365,13 @@ const Page: React.FC = () => {
                   flexGrow: 2,
                   maxWidth: '25em',
                   m: 0,
-                  my: 1,
                   marginRight: 0.4,
                 }}
               >
-                {address} <span style={{ fontWeight: 'bold' }}>{curName}</span>{' '}
+                <span style={{ color: '#888', marginRight: '0.5em' }}>
+                  {e.addrRemainder}
+                </span>
+                <span>{e.name}</span>{' '}
               </MUI.Typography>
               <MUI.Box
                 sx={{
@@ -320,9 +380,9 @@ const Page: React.FC = () => {
                   textAlign: 'right',
                 }}
               >
-                {idSizeList.map((e) => {
-                  const id = e[0];
-                  const size = e[1];
+                {idSizeList.map((idSize) => {
+                  const id = idSize[0];
+                  const size = idSize[1];
                   return (
                     <MUI.ButtonGroup
                       key={`${id}`}
@@ -341,7 +401,7 @@ const Page: React.FC = () => {
                       </MUI.Button>
                       <MUI.Button
                         onClick={() => {
-                          handleDeleteClick(id, curName, size);
+                          handleDeleteClick(id, e.name, size);
                         }}
                         color="warning"
                       >
@@ -360,11 +420,11 @@ const Page: React.FC = () => {
     });
   }
 
-  const handleAddDialogClose = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleAddDialogClose = () => {
     setAddDialogOpen(false);
   };
 
-  const handleAddDialogOpen = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleAddDialogOpen = () => {
     setAddDialogOpen(true);
   };
 
