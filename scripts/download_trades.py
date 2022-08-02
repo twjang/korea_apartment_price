@@ -2,6 +2,7 @@
 import datetime
 import os
 import sys
+import traceback
 
 ROOT=os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(ROOT)
@@ -174,6 +175,7 @@ def remove_trade_entries_from_db(ymregions: List[Tuple[int, int, int]]):
   col = korea_apartment_price.db.get_trades_collection()
 
   for year, month, lawaddrcode_city in tqdm(ymregions):
+    print(f' - deleting {(year, month, lawaddrcode_city)}')
     col.delete_many({
       '$and': [
         {'$expr': { '$eq': [ "$year", year ] }},
@@ -196,13 +198,16 @@ def fetch_and_insert(arg: Tuple[int, int, int]):
   data = None
 
   if not os.path.exists(fpath):
-    print(f'fetching {ymd_code}-{region_code}')
     while data is None:
+      print(f'fetching {ymd_code}-{region_code}')
       try:
         time.sleep(0.1)
         data = dn.get(ymd_code, region_code)
       except requests.exceptions.Timeout:
-        pass
+        print(f'{ymd_code}: timeout')
+      except Exception as e:
+        print(f'{ymd_code}: exception ({e})')
+        traceback.print_exc()
 
     if len(data) > 0:
       with open(fpath, 'w') as f:
@@ -216,8 +221,9 @@ def fetch_and_insert(arg: Tuple[int, int, int]):
   if len(data) > 0:
     col = korea_apartment_price.db.get_trades_collection()
     col.insert_many(data)
+    print(f'{fname}: {len(data)}')
   else:
-    print(f'Warning: failed to fetch {fname}')
+    print(f'{fname}: 0 (nothing fetched)')
 
 
 

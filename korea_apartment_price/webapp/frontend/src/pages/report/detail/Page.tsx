@@ -50,6 +50,10 @@ type OrderbookDetail = {
 
 const monthlyRentToDeposit = (1 / 4.2) * 100 * 12;
 const currentOrderbookLineLengthPortion = 0.01;
+const highlightColor = {
+  sellChip: '#ffbdf8',
+  sellChart: 0xff00e4ff
+}
 
 function binarySearch<V, E>(
   toFind: V,
@@ -96,6 +100,8 @@ const Page: React.FC = () => {
   const [detailPriceRange, setDetailPriceRange] = React.useState<number | null>(
     null
   );
+
+  const [highlightedSell, setHighlightedSell] = React.useState<string | null>(null);
 
   const navigate = useNavigate();
 
@@ -333,6 +339,43 @@ const Page: React.FC = () => {
     }
     return [x, y, minY, maxY];
   }, [rents]);
+
+  const [
+    chartHighlightedOrderbookPaths
+  ] = React.useMemo<[Path[] | null]>(()=>{
+    let paths: Path[] | null = null;
+    if (highlightedSell && orderbook && orderbook.length > 0) {
+      paths = [];
+      let prevX: number | null = null;
+      let maxCnt = 1;
+
+      orderbook.forEach((egroup) => {
+        egroup.items.forEach((e) => {
+          maxCnt = Math.max(maxCnt, e.homes.length);
+        });
+      });
+
+      orderbook.forEach((egroup) => {
+        const x =
+          (dateSerialToDayOffset(parseInt(egroup.fetched_date)) -
+            dateSerialToDayOffset(dateFromSerial)) /
+          30;
+        egroup.items.forEach((e) => {
+          const xStart = prevX !== null ? prevX : x - 1 / 30;
+          const xEnd = x;
+          const y = e.price;
+          if (paths && e.homes.includes(highlightedSell)) {
+            paths.push({
+              x: new Float32Array([xStart, xEnd]),
+              y: new Float32Array([y, y]),
+            });
+          }
+        });
+        prevX = x;
+      });
+    }
+    return [paths];
+  }, [orderbook, highlightedSell]);
 
   const [
     chartOrderbookPaths,
@@ -759,6 +802,16 @@ const Page: React.FC = () => {
             onClick={handleClick}
             xAxisLabels={xAxisLabelGenerator}
           >
+            {chartHighlightedOrderbookPaths && (
+              <ChartStyledPathGroup
+                key={highlightedSell}
+                paths={chartHighlightedOrderbookPaths}
+                width={4}
+                color={highlightColor.sellChart}
+                dashType={[10]}
+                zOrder={-1}
+              />
+            )}
             {chartLatestOrderbookPaths && (
               <ChartStyledPathGroup
                 paths={chartLatestOrderbookPaths}
@@ -842,8 +895,15 @@ const Page: React.FC = () => {
                         <MUI.Chip
                           variant="outlined"
                           size="small"
-                          sx={{ margin: '2px' }}
+                          sx={{ margin: '2px', cursor: 'pointer', ...((h===highlightedSell)?{ backgroundColor: highlightColor.sellChip }:{})}}
                           label={`${h}`}
+                          onClick={()=>{
+                            if (h===highlightedSell) {
+                              setHighlightedSell(null);
+                            } else  {
+                              setHighlightedSell(h);
+                            } 
+                          }}
                         />
                       );
                     })}

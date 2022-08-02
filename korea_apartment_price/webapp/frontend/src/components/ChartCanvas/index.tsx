@@ -534,7 +534,7 @@ const ChartCanvas = (prop: ChartCanvasProp) => {
       </svg>
       <Canvas
         dpr={1}
-        style={{ touchAction: 'none' }}
+        style={{ touchAction: 'none', cursor: 'crosshair' }}
         orthographic
         // to prevent our prcious objects from being frustum-culled out
         camera={{

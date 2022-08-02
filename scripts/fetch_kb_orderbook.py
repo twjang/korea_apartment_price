@@ -15,7 +15,7 @@ import argparse
 import pandas as pd
 
 from korea_apartment_price.path import SCRIPT_ROOT
-from korea_apartment_price import db 
+from korea_apartment_price import db
 from korea_apartment_price.kb_liiv import KBLiivCrawler
 from korea_apartment_price.utils import keyconvert
 
@@ -36,7 +36,8 @@ for region_code in tqdm(region_codes['code5']):
   for apt in apts:
     apt_idnames.add((apt['id'], apt['name']))
 
-apt_idnames = list(apt_idnames)
+apt_idnames = sorted(list(apt_idnames))
+print(apt_idnames)
 
 db.create_indices()
 col = db.get_kbliiv_apt_orderbook_collection()
@@ -52,7 +53,7 @@ if args.remove_todays_orderbook:
 print ('[*] downloading orderbooks')
 crawler = KBLiivCrawler()
 
-for apt_id, apt_name in tqdm(apt_idnames):
+for idx, (apt_id, apt_name) in enumerate(apt_idnames):
   data = None
   while data is None:
     try:
@@ -66,7 +67,11 @@ for apt_id, apt_name in tqdm(apt_idnames):
       print(f'failed to retrieve apt_name={apt_name} apt_id={apt_id}. retrying..')
       time.sleep(1.0)
 
-  if len(data) > 0:
-    col.insert_many([keyconvert(e, {'trade_type': lambda x: x.value}) for e in data])
+  if data is not None:
+    print(f'[{idx + 1} / {len(apt_idnames)}] {apt_id},{apt_name}: {len(data)}')
+    if len(data) > 0:
+      col.insert_many([keyconvert(e, {'trade_type': lambda x: x.value}) for e in data])
+  else:
+    print(f'{apt_id},{apt_name}: failed to fetch')
 
 print ('[*] done')
