@@ -245,6 +245,7 @@ if __name__ == '__main__':
   entries_in_files = set(list_trade_entries_in_files())
 
   to_be_removed_from_db = list(entries_in_db.difference(entries_in_files))
+  to_be_removed_from_db.sort()
   print(f'[*] removing {len(to_be_removed_from_db)} entries from db not presenting in filesystem')
   remove_trade_entries_from_db(to_be_removed_from_db)
 
