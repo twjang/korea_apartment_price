@@ -249,7 +249,7 @@ if __name__ == '__main__':
   remove_trade_entries_from_db(to_be_removed_from_db)
 
   print('[*] fetching trade entries and save them to db/fs')
-  entries_to_fetch = list(set(entries_to_fetch).difference(entries_in_db))
+  entries_to_fetch = list(set(entries_to_fetch).difference(entries_in_files))
   entries_to_fetch.sort()
 
   for jobidx, job in enumerate(tqdm(entries_to_fetch)):
