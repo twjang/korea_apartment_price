@@ -37,7 +37,6 @@ for region_code in tqdm(region_codes['code5']):
     apt_idnames.add((apt['id'], apt['name']))
 
 apt_idnames = sorted(list(apt_idnames))
-print(apt_idnames)
 
 db.create_indices()
 col = db.get_kbliiv_apt_orderbook_collection()
@@ -55,7 +54,9 @@ crawler = KBLiivCrawler()
 
 for idx, (apt_id, apt_name) in enumerate(apt_idnames):
   data = None
+  retry_cnt = 0
   while data is None:
+    print(f'[{idx + 1} / {len(apt_idnames)}] {apt_id},{apt_name} <{retry_cnt}>')
     try:
       data = crawler.cleansed_orderbook(apt_id, trade_types=[db.TradeType.WHOLE])
     except KeyboardInterrupt as e:
@@ -66,9 +67,12 @@ for idx, (apt_id, apt_name) in enumerate(apt_idnames):
       print(traceback.format_exc())
       print(f'failed to retrieve apt_name={apt_name} apt_id={apt_id}. retrying..')
       time.sleep(1.0)
+    if data is not None and len(data) == 0:
+      retry_cnt += 1
+      if retry_cnt < 3: data = None
 
   if data is not None:
-    print(f'[{idx + 1} / {len(apt_idnames)}] {apt_id},{apt_name}: {len(data)}')
+    print(f'[{idx + 1} / {len(apt_idnames)}] {apt_id},{apt_name} ==> {len(data)}')
     if len(data) > 0:
       col.insert_many([keyconvert(e, {'trade_type': lambda x: x.value}) for e in data])
   else:
