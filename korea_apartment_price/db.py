@@ -36,6 +36,7 @@ _geocodes_collection: Optional[Collection] = None
 _kbliiv_apt_collection: Optional[Collection] = None
 _kbliiv_apt_type_collection: Optional[Collection] = None
 _kbliiv_apt_orderbook_collection: Optional[Collection] = None
+_deposit_interest_rate_collection: Optional[Collection] = None
 
 
 def get_conn()->MongoClient:
@@ -528,6 +529,43 @@ def query_kb_orderbook(apt_id: ApartmentId, size_from: Optional[int]=None, size_
   return col.find({'$and':cond})
 
 
+### Related to deposit interest rate (전월세 전환율)
+class RowDepositInterestRate(TypedDict):
+  _id: Any
+  region: str
+  value: float
+  date_serial: int
+  year: int
+  month: int
+  size_min: int
+  size_max: int
+
+
+def get_deposit_interest_rate_collection()->Collection:
+  global _deposit_interest_rate_collection
+  if _deposit_interest_rate_collection is None:
+    _deposit_interest_rate_collection = get_db()['deposit_interest_rate']
+  return _deposit_interest_rate_collection
+
+
+def query_deposit_interest_rate(region: str, size: Optional[int]=None, start_ym:Optional[int]=None, end_ym: Optional[int]=None)->List[RowDepositInterestRate]:
+  col = get_deposit_interest_rate_collection()
+  cond = [{
+    'region': region,
+  }]
+  if size is not None:
+    cond.append({'size_min': {"$lte": size}})
+    cond.append({'size_max': {"$gte": size}})
+
+  if start_ym is not None:
+    cond.append({'date_serial': {"$gte": start_ym}})
+
+  if end_ym is not None:
+    cond.append({'date_serial': {"$lte": end_ym}})
+
+  return col.find({'$query':{'$and': cond}, '$orderby':{ 'date_serial': 1 }})
+
+
 def create_indices():
   col = get_rents_collection()
   col.create_index('location_code')
@@ -581,3 +619,11 @@ def create_indices():
   col.create_index('confirmed_at')
   col.create_index('fetched_at')
   col.create_index('trade_type')
+
+  col = get_deposit_interest_rate_collection()
+  col.create_index('region')
+  col.create_index('size_min')
+  col.create_index('size_max')
+  col.create_index('date_serial')
+  col.create_index('year')
+  col.create_index('month')

@@ -37,6 +37,7 @@ type RentDetail = {
     priceDeposit: number;
     priceRent: number;
     price: number;
+    depositInterestRate: string;
   }[];
 };
 
@@ -48,12 +49,11 @@ type OrderbookDetail = {
   }[];
 };
 
-const monthlyRentToDeposit = (1 / 4.2) * 100 * 12;
 const currentOrderbookLineLengthPortion = 0.01;
 const highlightColor = {
   sellChip: '#ffbdf8',
-  sellChart: 0xff00e4ff
-}
+  sellChart: 0xff00e4ff,
+};
 
 function binarySearch<V, E>(
   toFind: V,
@@ -101,7 +101,9 @@ const Page: React.FC = () => {
     null
   );
 
-  const [highlightedSell, setHighlightedSell] = React.useState<string | null>(null);
+  const [highlightedSell, setHighlightedSell] = React.useState<string | null>(
+    null
+  );
 
   const navigate = useNavigate();
 
@@ -332,7 +334,9 @@ const Page: React.FC = () => {
             dateSerialToDayOffset(dateFromSerial)) /
           30;
         y![idx] =
-          (e.price_deposit + e.price_monthly * monthlyRentToDeposit) / 10000;
+          (e.price_deposit +
+            (e.price_monthly / e.deposit_interest_rate) * 100.0 * 12) /
+          10000;
         if (minY === 0 || minY > y![idx]) minY = y![idx];
         if (maxY === 1 || maxY < y![idx]) maxY = y![idx];
       });
@@ -340,9 +344,9 @@ const Page: React.FC = () => {
     return [x, y, minY, maxY];
   }, [rents]);
 
-  const [
-    chartHighlightedOrderbookPaths
-  ] = React.useMemo<[Path[] | null]>(()=>{
+  const [chartHighlightedOrderbookPaths] = React.useMemo<
+    [Path[] | null]
+  >(() => {
     let paths: Path[] | null = null;
     if (highlightedSell && orderbook && orderbook.length > 0) {
       paths = [];
@@ -392,10 +396,16 @@ const Page: React.FC = () => {
       let prevX: number | null = null;
       let maxCnt = 1;
 
+      let last_fetched_date: number | null = null;
       orderbook.forEach((egroup) => {
         egroup.items.forEach((e) => {
           maxCnt = Math.max(maxCnt, e.homes.length);
         });
+        if (
+          last_fetched_date === null ||
+          last_fetched_date < parseInt(egroup.fetched_date)
+        )
+          last_fetched_date = parseInt(egroup.fetched_date);
       });
 
       orderbook.forEach((egroup) => {
@@ -403,10 +413,8 @@ const Page: React.FC = () => {
           (dateSerialToDayOffset(parseInt(egroup.fetched_date)) -
             dateSerialToDayOffset(dateFromSerial)) /
           30;
-        const isLatest =
-          dateSerialToDayOffset(dateToSerial) -
-            dateSerialToDayOffset(parseInt(egroup.fetched_date)) <
-          5;
+        const isLatest = last_fetched_date === parseInt(egroup.fetched_date);
+
         egroup.items.forEach((e) => {
           const xStart = prevX !== null ? prevX : x - 1 / 30;
           const xEnd = x;
@@ -565,7 +573,9 @@ const Page: React.FC = () => {
         const curDateStr = dateSerialToString(rents[i].date_serial);
         const curPrice =
           (rents[i].price_deposit +
-            rents[i].price_monthly * monthlyRentToDeposit) /
+            (rents[i].price_monthly / rents[i].deposit_interest_rate) *
+              100 *
+              12) /
           10000;
         if (
           curPrice < detailPrice - detailPriceRange ||
@@ -580,30 +590,22 @@ const Page: React.FC = () => {
         )
           continue;
 
+        const newDetail = {
+          floor: `${rents[i].floor}층`,
+          priceRent: parseFloat(rents[i].price_monthly.toFixed(2)),
+          priceDeposit: parseFloat((rents[i].price_deposit / 10000).toFixed(2)),
+          price: parseFloat(curPrice.toFixed(2)),
+          depositInterestRate: rents[i].deposit_interest_rate.toFixed(2),
+        };
+
         if (curEnt === null || (curEnt && curEnt.date !== curDateStr)) {
           if (curEnt) res.push(curEnt);
           curEnt = {
             date: curDateStr,
-            detail: [
-              {
-                floor: `${rents[i].floor}층`,
-                priceRent: parseFloat(rents[i].price_monthly.toFixed(2)),
-                priceDeposit: parseFloat(
-                  (rents[i].price_deposit / 10000).toFixed(2)
-                ),
-                price: parseFloat(curPrice.toFixed(2)),
-              },
-            ],
+            detail: [newDetail],
           };
         } else {
-          curEnt.detail.push({
-            floor: `${rents[i].floor}층`,
-            priceRent: parseFloat(rents[i].price_monthly.toFixed(2)),
-            priceDeposit: parseFloat(
-              (rents[i].price_deposit / 10000).toFixed(2)
-            ),
-            price: parseFloat(curPrice.toFixed(2)),
-          });
+          curEnt.detail.push(newDetail);
         }
       }
       if (curEnt) res.push(curEnt);
@@ -895,14 +897,20 @@ const Page: React.FC = () => {
                         <MUI.Chip
                           variant="outlined"
                           size="small"
-                          sx={{ margin: '2px', cursor: 'pointer', ...((h===highlightedSell)?{ backgroundColor: highlightColor.sellChip }:{})}}
+                          sx={{
+                            margin: '2px',
+                            cursor: 'pointer',
+                            ...(h === highlightedSell
+                              ? { backgroundColor: highlightColor.sellChip }
+                              : {}),
+                          }}
                           label={`${h}`}
-                          onClick={()=>{
-                            if (h===highlightedSell) {
+                          onClick={() => {
+                            if (h === highlightedSell) {
                               setHighlightedSell(null);
-                            } else  {
+                            } else {
                               setHighlightedSell(h);
-                            } 
+                            }
                           }}
                         />
                       );
@@ -978,9 +986,11 @@ const Page: React.FC = () => {
                                 }}
                               >{`${de.priceDeposit
                                 .toFixed(2)
-                                .replace(/[.]?0*$/, '')}억/${
-                                de.priceRent
-                              }만원`}</span>
+                                .replace(/[.]?0*$/, '')}억${
+                                de.priceRent > 0
+                                  ? `/${de.priceRent}만원 (${de.depositInterestRate}%)`
+                                  : ''
+                              }`}</span>
                             </span>
                           }
                         />

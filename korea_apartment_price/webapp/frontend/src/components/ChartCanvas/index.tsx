@@ -536,7 +536,7 @@ const ChartCanvas = (prop: ChartCanvasProp) => {
         dpr={1}
         style={{ touchAction: 'none', cursor: 'crosshair' }}
         orthographic
-        // to prevent our prcious objects from being frustum-culled out
+        // to prevent our precious objects from being frustum-culled out
         camera={{
           left: prop.dataRange[0],
           bottom: prop.dataRange[1],

@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 import korea_apartment_price
+import korea_apartment_price.deposit_interest_rate
 from korea_apartment_price.db import ApartmentId
 from korea_apartment_price.webapp.types import BaseResponse
 from korea_apartment_price.webapp.deps import (
@@ -93,6 +94,8 @@ class RentEntry(BaseModel):
   price_monthly: float
   date_serial: int
   floor: int
+  deposit_interest_rate: float
+  deposit_interest_rate_ym: int
 
 @router.post("/rents", response_model=BaseResponse[List[RentEntry]])
 async def query_rents(query: HistoryRequest):
@@ -110,7 +113,18 @@ async def query_rents(query: HistoryRequest):
     size_to = query.size
   )
 
+  dir_ents = korea_apartment_price.deposit_interest_rate.query(rc=apt_id, size=query.size, start_ym=int(query.date_from / 100), end_ym=int(query.date_to / 100))
+  dir_ents = list(dir_ents)
+  deidx = 0 
+
   rents = [_keep_keys_in_dict(r, ['price_deposit', 'price_monthly', 'date_serial', 'floor']) for r in rents]
+  for r in rents:
+    cur_ym = int(r['date_serial'] / 100)
+    while dir_ents[deidx]['date_serial'] < cur_ym and deidx < len(dir_ents) - 1:
+      deidx += 1
+    r['deposit_interest_rate'] = dir_ents[deidx]['value']
+    r['deposit_interest_rate_ym'] = dir_ents[deidx]['date_serial']
+
   return BaseResponse(success=True, result=rents)
 
 

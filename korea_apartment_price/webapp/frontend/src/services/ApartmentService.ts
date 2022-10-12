@@ -26,6 +26,8 @@ export interface RentHistoryEntry {
   price_deposit: number;
   price_monthly: number;
   date_serial: number;
+  deposit_interest_rate: number;
+  deposit_interest_rate_ym: number;
   floor: number;
 }
 

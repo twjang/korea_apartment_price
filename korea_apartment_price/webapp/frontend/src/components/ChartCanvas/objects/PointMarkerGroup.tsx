@@ -306,7 +306,7 @@ void main() {
   if (prop.x.length === 0 || prop.y.length === 0) return <></>;
 
   return (
-    <mesh ref={meshRef}>
+    <mesh ref={meshRef} frustumCulled={false}>
       <bufferGeometry>
         <bufferAttribute
           attach="index"

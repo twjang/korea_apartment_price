@@ -529,7 +529,7 @@ void main() {
   if (prop.paths.length === 0) return <></>;
 
   return (
-    <mesh ref={meshRef}>
+    <mesh ref={meshRef} frustumCulled={false}>
       <bufferGeometry>
         <bufferAttribute
           attach="index"
