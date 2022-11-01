@@ -121,8 +121,15 @@ class KBLiivCrawler:
 
   def orderbook(self, apt_id: int, order_by: str='date', aggregate: bool=True):
     cnt, _ = self.partial_orderbook(apt_id, order_by, aggregate, 10, 1)
-    cnt, res = self.partial_orderbook(apt_id, order_by, aggregate, cnt, 1)
-    return res
+
+    final_res = []
+    cnt_per_page = 50
+    num_pages = int((cnt+cnt_per_page - 1) / cnt_per_page)
+    for pageidx in range(num_pages):
+      cnt, cur_res = self.partial_orderbook(apt_id, order_by, aggregate, cnt_per_page, pageidx + 1)
+      final_res += cur_res
+      print (f'Fetched apt_id={apt_id} cur_page={pageidx+1}/{num_pages} cnt={len(final_res)}/{cnt}')
+    return final_res
 
   def cleansed_orderbook(self, apt_id: int, order_by: str='date', aggregate: bool=True, trade_types: Optional[List[TradeType]]=None, sizes: Optional[List[float]]=None, include_detail:bool=True)->List[RowKBOrderbook]:
     now = datetime.datetime.now()

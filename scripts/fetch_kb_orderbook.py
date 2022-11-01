@@ -52,6 +52,7 @@ if args.remove_todays_orderbook:
 print ('[*] downloading orderbooks')
 crawler = KBLiivCrawler()
 
+
 for idx, (apt_id, apt_name) in enumerate(apt_idnames):
   data = None
   retry_cnt = 0
