@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { Canvas } from '@react-three/fiber';
 import { ChartViewContext } from './utils/ChartViewContext';
+import useRefWithCallback from '../../misc/useRefWithCallback';
 
 export type ChartClickEvent = {
   x: number;
@@ -72,9 +73,7 @@ type HTMLPlacerProp = {
   children: JSX.Element | JSX.Element[];
   x: number;
   y: number;
-  xAnchor?: number;
-  yAnchor?: number;
-  rotate?: number;
+  transforms?: string[];
 };
 
 const HTMLPlacer = (prop: HTMLPlacerProp) => {
@@ -84,9 +83,7 @@ const HTMLPlacer = (prop: HTMLPlacerProp) => {
         position: 'absolute',
         top: prop.y,
         left: prop.x,
-        transform: `translateX(-${prop.xAnchor || 0}%) translateY(-${
-          prop.yAnchor || 0
-        }%) rotate(${prop.rotate || 0}deg)`,
+        ...((prop.transforms)?{ transform: prop.transforms.join(' ') }: {}),
       }}
     >
       {prop.children}
@@ -116,7 +113,7 @@ const defaultLabelGenerator = (range: [number, number]): LabelInfo[] => {
 };
 
 const getOffset = (
-  e: React.PointerEvent | React.WheelEvent | React.MouseEvent
+  e: React.PointerEvent | React.WheelEvent | React.MouseEvent | WheelEvent
 ): [number, number] => {
   const rect = (e.target as HTMLDivElement).getBoundingClientRect();
   return [e.clientX - rect.x, e.clientY - rect.y];
@@ -130,21 +127,32 @@ const ChartCanvas = (prop: ChartCanvasProp) => {
   const [canvasSize, setCanvasSize] = React.useState<[number, number] | null>(
     null
   );
-  const frameRef = React.useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
+  const [frameRef, setFrameRef] = useRefWithCallback<HTMLDivElement>((frame)=>{
+    frame.addEventListener('wheel', handleWheel, {passive: false});
+    window.addEventListener('resize', canvasSizeUpdater);
+  }, (frame)=>{
+    frame.removeEventListener('wheel', handleWheel);
+    window.removeEventListener('resize', canvasSizeUpdater);
+  });
+
+  const canvasSizeUpdater = ()=>{
     if (frameRef.current) {
       setCanvasSize([
         frameRef.current.clientWidth,
         frameRef.current.clientHeight,
-      ] as [number, number]);
+      ]);
     }
+  }
+  React.useEffect(()=>{
+    canvasSizeUpdater();
   }, []);
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.stopPropagation();
-
+  const handleWheel = (e: WheelEvent) => {
     if (!canvasSize) return;
+
+    e.stopPropagation();
+    e.preventDefault();
 
     const eventCoord = clientCoordToDataCoord(
       prop,
@@ -400,17 +408,26 @@ const ChartCanvas = (prop: ChartCanvasProp) => {
         ((canvasSize[0] * (prop.chartRegion[2] - prop.chartRegion[0])) /
           (visibleRange[2] - visibleRange[0])) *
         (lblInfo.value - visibleRange[0]);
-      const yAnchor = 0;
-      const xAnchor = 50;
+      let transforms: string[] = [];
+
+      if (angle > 45 && angle < 135) {
+        transforms = [
+          `translateX(-50%)`,
+          `rotate(${angle}deg)`,
+          `translateX(50%)`,
+        ]
+      } else {
+        transforms = [
+          `translateX(-50%)`,
+          `rotate(${angle}deg)`,
+        ]
+      }
       elems.push(
         <HTMLPlacer
           key={`xaxis-${idx}`}
           x={xBase + xDiff}
-          y={yBase + 5}
-          rotate={angle}
-          xAnchor={xAnchor}
-          yAnchor={yAnchor}
-        >
+          y={yBase}
+          transforms={transforms}>
           {lblInfo.label}
         </HTMLPlacer>
       );
@@ -457,18 +474,19 @@ const ChartCanvas = (prop: ChartCanvasProp) => {
         (prop.chartRegion[3] - prop.chartRegion[1]) *
         ((lblInfo.value - visibleRange[1]) /
           (visibleRange[3] - visibleRange[1]));
-      const yAnchor = 50;
-      const xAnchor = 100;
+
+      const transforms = [
+        `translateX(-60%)`,
+        `translateY(-50%)`,
+        `rotate(${angle}deg)`,
+      ]
 
       elems.push(
         <HTMLPlacer
           key={`yaxis-${idx}`}
           x={xBase - 5}
           y={yBase + yDiff}
-          rotate={angle}
-          xAnchor={xAnchor}
-          yAnchor={yAnchor}
-        >
+          transforms={transforms}>
           {lblInfo.label}
         </HTMLPlacer>
       );
@@ -504,7 +522,7 @@ const ChartCanvas = (prop: ChartCanvasProp) => {
 
   return (
     <div
-      ref={frameRef}
+      ref={setFrameRef}
       style={{
         position: 'relative',
         width: '100%',
@@ -513,7 +531,6 @@ const ChartCanvas = (prop: ChartCanvasProp) => {
         margin: 0,
         padding: 0,
       }}
-      onWheel={handleWheel}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

@@ -787,14 +787,19 @@ const Page: React.FC = () => {
       <div
         style={{
           width: 'calc(100% - 2em)',
-          height: 'calc(50vh)',
+          height: 'calc(60vh)',
+          marginBottom: '2em',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
         }}
       >
         {isLoading ? (
-          <MUI.CircularProgress />
+          <MUI.CircularProgress size={60}/>
         ) : (
           <ChartCanvas
-            chartRegion={[0.05, 0.05, 0.95, 0.9]}
+            chartRegion={[0.05, 0.05, 0.95, 0.8]}
             dataRange={[
               minDataX,
               minDataY,
