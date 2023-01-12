@@ -526,6 +526,12 @@ const Page: React.FC = () => {
       }
       if (curEnt) res.push(curEnt);
     }
+    res.forEach(d=>d.detail.sort ((a, b)=>{
+       if (a.price !== b.price) return a.price-b.price;
+       if (a.floor < b.floor) return -1;
+       else if (a.floor > b.floor) return 1;
+       return 0;
+    })); 
     return res;
   }, [detailDate, detailPrice, trades]);
 
@@ -610,6 +616,12 @@ const Page: React.FC = () => {
       }
       if (curEnt) res.push(curEnt);
     }
+    res.forEach(d=>d.detail.sort ((a, b)=>{
+       if (a.price !== b.price) return a.price-b.price;
+       if (a.floor < b.floor) return -1;
+       else if (a.floor > b.floor) return 1;
+       return 0;
+    })); 
     return res;
   }, [detailDate, detailPrice, rents]);
 
@@ -663,6 +675,11 @@ const Page: React.FC = () => {
         }
       }
     }
+    res.forEach(d=>d.detail.forEach(e=>e.homes.sort ((a, b)=>{
+       if (a < b) return -1;
+       else if (a > b) return 1;
+       return 0;
+    }))); 
     return res;
   }, [detailDate, detailPrice, orderbook]);
 
