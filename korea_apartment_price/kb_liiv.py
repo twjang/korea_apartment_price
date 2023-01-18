@@ -1,6 +1,6 @@
 import datetime
 import requests
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 from enum import Enum
 from korea_apartment_price.db import RowKBOrderbook, TradeType
 
@@ -50,49 +50,66 @@ def _convert_trade_type(d: str)->Optional[TradeType]:
 
 
 class KBLiivCrawler:
-  def __init__(self, timeout:float=60.0):
+  def __init__(self, timeout:float=60.0, reqeuests_args:Optional[Dict[str, any]]=None):
     self.url = 'https://api.kbland.kr'
     self.timeout = timeout
+    self.requests_args = reqeuests_args if reqeuests_args is not None else dict()
+    self.requests_args['headers'] = {
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Content-Length': '1538',
+      'Content-Type': 'application/json;charset=UTF-8',
+      'DNT': '1',
+      'Host': 'api.kbland.kr',
+      'Origin': 'https://kbland.kr',
+      'Pragma': 'no-cache',
+      'Referer': 'https://kbland.kr/',
+      'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36',
+      'WebService': '1',
+    }
 
   def list_city(self, city: KBDo):
     url = f'{self.url}/land-complex/map/siGunGuAreaNameList'
     params = {'시도명': city.value}
-    resp = requests.get(url, params=params, timeout=self.timeout)
+    resp = requests.get(url, params=params, timeout=self.timeout, **self.requests_args)
     data = resp.json()
     return data.get('dataBody', {}).get('data', list())
 
   def list_gu(self, city: KBDo, gu_name: str):
     url = f'{self.url}/land-complex/map/stutDongAreaNameList'
     params = {'시도명': city.value, '시군구명': gu_name}
-    resp = requests.get(url, params=params, timeout=self.timeout)
+    resp = requests.get(url, params=params, timeout=self.timeout, **self.requests_args)
     data = resp.json()
     return data.get('dataBody', {}).get('data', list())
 
   def list_apts(self, lawaddrcode: str):
     url = f'{self.url}/land-complex/complexComm/hscmList'
     params = {'법정동코드': lawaddrcode}
-    resp = requests.get(url, params=params, timeout=self.timeout)
+    resp = requests.get(url, params=params, timeout=self.timeout, **self.requests_args)
     data = resp.json()
     return data.get('dataBody', {}).get('data', list())
 
   def apt_info(self, apt_id: int, apt_type: str):
     url = f'{self.url}/land-complex/complex/main'
     params = {'단지기본일련번호': apt_id, '매물종별구분': apt_type}
-    resp = requests.get(url, params=params, timeout=self.timeout)
+    resp = requests.get(url, params=params, timeout=self.timeout, **self.requests_args)
     data = resp.json()
     return data.get('dataBody', {}).get('data', list())
 
   def apt_type_info(self, apt_id: int):
     url = f'{self.url}/land-complex/complex/typInfo'
     params = {'단지기본일련번호': apt_id}
-    resp = requests.get(url, params=params, timeout=self.timeout)
+    resp = requests.get(url, params=params, timeout=self.timeout, **self.requests_args)
     data = resp.json()
     return data.get('dataBody', {}).get('data', list())
 
   def apt_price_info (self, apt_id: int, area_type_id: int):
     url = f'{self.url}/land-price/price/BasePrcInfoNew'
     params = {'단지기본일련번호': apt_id, '면적일련번호': area_type_id}
-    resp = requests.get(url, params=params, timeout=self.timeout)
+    resp = requests.get(url, params=params, timeout=self.timeout, **self.requests_args)
     data = resp.json()
     return data.get('dataBody', {}).get('data', list())
 
@@ -111,7 +128,7 @@ class KBLiivCrawler:
       '페이지목록수': items_per_page,
       '페이지번호': page_idx
     }
-    resp = requests.post(url, json=data, timeout=self.timeout)
+    resp = requests.post(url, json=data, timeout=self.timeout, **self.requests_args)
     data = resp.json()
 
     total_cnt = data.get('dataBody', {}).get('data', {}).get('총조회수', -1)

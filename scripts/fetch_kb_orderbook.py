@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 import traceback
 import datetime
 import os
@@ -22,6 +23,7 @@ from korea_apartment_price.utils import keyconvert
 def parse_args():
   parser = argparse.ArgumentParser()
   parser.add_argument('-r,--remove_todays_orderbook', dest='remove_todays_orderbook', action='store_true', help='remove all orders fetched today')
+  parser.add_argument('-c,--config_for_requests',  dest='config_for_requests', required=False, help='specify json file which contains the additional arguments for requests module')
   return parser.parse_args()
 
 
@@ -50,7 +52,13 @@ if args.remove_todays_orderbook:
 
 
 print ('[*] downloading orderbooks')
-crawler = KBLiivCrawler()
+
+requests_args = {}
+if args.config_for_requests:
+  with open(args.config_for_requests, 'r') as f:
+    requests_args = json.loads(f.read())
+  print (f'[*] using config for requests: {requests_args}')
+crawler = KBLiivCrawler(reqeuests_args=requests_args)
 
 
 for idx, (apt_id, apt_name) in enumerate(apt_idnames):
