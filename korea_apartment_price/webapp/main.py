@@ -38,7 +38,9 @@ if DEBUG:
 from korea_apartment_price.webapp.routers import (
   account,
   fav,
-  apartment
+  apartment,
+  volume,
+  region_code,
 )
 
 tags_metadata = [
@@ -54,6 +56,14 @@ tags_metadata = [
     "name": "Favorite",
     "description": "아파트 즐겨찾기 정보"
   },
+  {
+    "name": "Region code",
+    "description": "지역코드 조회"
+  },
+  {
+    "name": "Trading volume",
+    "description": "주간 거래량 통계"
+  },
 ]
 
 app = FastAPI(
@@ -64,6 +74,8 @@ app = FastAPI(
 app.include_router(account.router, prefix='/api')
 app.include_router(apartment.router, prefix='/api')
 app.include_router(fav.router, prefix='/api')
+app.include_router(region_code.router, prefix='/api')
+app.include_router(volume.router, prefix='/api')
 
 STATIC_PATH=os.path.realpath(os.path.join(os.path.dirname(__file__), 'static'))
 app.mount("/", StaticFiles(directory=STATIC_PATH, html=True), name="static")
