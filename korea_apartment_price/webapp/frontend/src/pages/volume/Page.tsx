@@ -369,6 +369,7 @@ const Page: React.FC = () => {
   const [volumeParams, setVolumeParams] = React.useState<VolumeParams>({});
   const [isGraphLoading, setIsGraphLoading] = React.useState<boolean>(false);
   const [data, setData] = React.useState<VolumeData | null>(null);
+  const [graphTitle, setGraphTitle] = React.useState<string>('');
   const authInfo = useAuthInfo();
 
   const handleSearchAddressCodeDialogOpen = () => {  setSearchAddressCodeDialogOpen(true); };
@@ -394,12 +395,19 @@ const Page: React.FC = () => {
       console.log(resp);
 
       if (resp.success && resp.result) {
+        let title = `${selectedAddresses[0].address}`
+        title += (selectedAddresses.length > 1)? (" 외 " + (selectedAddresses.length -1) + "개 지역 ") : " ";
+        title += '주간 거래량';
+
+        setGraphTitle(title);
         setData(resp.result);
       }
 
       setIsGraphLoading(false);     
     })();
   }
+
+  const showButtonEnabled = (selectedAddresses.length > 0);
 
   return (
     <MUI.Box style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -447,7 +455,7 @@ const Page: React.FC = () => {
             <MUI.Button variant="outlined" onClick={()=>{handleParamEditDialogOpen();}} style={{ marginLeft: '0.5em'}}>범위 변경</MUI.Button>
           </div>
           <div>
-            <MUI.Button variant="contained" onClick={()=>{ showGraph(); }}>조회</MUI.Button>
+            <MUI.Button variant="contained" onClick={()=>{ showGraph(); }} disabled={!showButtonEnabled}>조회</MUI.Button>
           </div>
         </div>
       </MUI.Paper>
@@ -480,7 +488,9 @@ const Page: React.FC = () => {
                   name: '평균거래가(억원)'
                 },
               ]}
-              layout={ {} }
+              layout={{
+                title: graphTitle
+              }}
               useResizeHandler={true}
               style={{width: '100%', height: '100%' }}
             />

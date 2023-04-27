@@ -6,9 +6,9 @@ import Page from './Page';
 
 export const cfg: PageConfig = {
   path: '/volume',
-  title: '거래량 통계',
+  title: '주간 거래량 통계',
   menuIcon: <MUIIcon.SsidChart />,
-  menuName: <MUI.Typography>거래량 통계</MUI.Typography>,
+  menuName: <MUI.Typography>주간 거래량 통계</MUI.Typography>,
   element: <Page />,
   notForGuest: true,
 };
