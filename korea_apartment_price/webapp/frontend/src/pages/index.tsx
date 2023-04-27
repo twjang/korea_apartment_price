@@ -3,6 +3,7 @@ import * as accountsPage from './accounts';
 import * as reportPage from './report';
 import * as favoritesPage from './favorites';
 import * as loginPage from './login';
+import * as volumePage from './volume';
 import {
   Route,
   Navigate,
@@ -37,6 +38,7 @@ export interface PageInfo extends PageConfig {
 export const rootPageConfig: PageConfig[] = [
   favoritesPage.cfg,
   reportPage.cfg,
+  volumePage.cfg,
   mePage.cfg,
   accountsPage.cfg,
   loginPage.cfg,

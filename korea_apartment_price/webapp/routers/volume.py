@@ -25,10 +25,12 @@ class VolumeQueryResp(TypedDict):
     total_price: List[float]
     avg_price: List[float]
 
+class VolumeQueryReq(TypedDict):
+    addrcodes: List[str]
 
-@router.get('/', response_model=BaseResponse[VolumeQueryResp])
+@router.post('/', response_model=BaseResponse[VolumeQueryResp])
 async def get_data(
-    addrcodes: List[str]=Query(default=[]),
+    req: VolumeQueryReq,
     date_from: Optional[int]=None,
     date_to: Optional[int]=None,
     size_from: Optional[float]=None,
@@ -36,8 +38,9 @@ async def get_data(
     price_from: Optional[float]=None,
     price_to: Optional[float]=None,
 ):
+    addrcodes = req.get('addrcodes', None)
     if addrcodes is None or len(addrcodes) == 0:
-        raise HTTPException(status_code=403)
+        raise HTTPException(status_code=400)
 
     addrcodes = list(set([int(c[:5]) for c in addrcodes if len(c[:5]) == 5]))
     col = korea_apartment_price.db.get_trades_collection()
@@ -91,10 +94,10 @@ async def get_data(
         first_date = datetime.date(year, 1, 1) + relativedelta(weeks=+weekid)
         hist_cnt[first_date] = hist_cnt.get(first_date, 0) + e['cnt']
         hist_total_price[first_date] = hist_total_price.get(first_date, 0.0) + e['money']
-    
+
     for d in hist_cnt:
         hist_avg_price[d] = hist_total_price[d] / hist_cnt[d]
-    
+
     x = sorted(hist_cnt.keys())
     x_str = [d.strftime('%Y-%m-%d') for d in sorted(hist_cnt.keys())]
     y_cnt = [hist_cnt[v] for v in x]
