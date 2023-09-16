@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "korea-apartment-price"
+version = "0.1.0"
+description = ""
+authors = ["Taewoong Jang"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+pymongo = "^4.5.0"
+tqdm = "^4.66.1"
+pandas = "^2.1.0"
+jamo = "^0.4.1"
+pyproj = "^3.6.0"
+py7zr = "^0.20.6"
+minify-html = "^0.11.1"
+fastapi = "^0.103.1"
+uvicorn = "^0.23.2"
+peewee = "^3.16.3"
+pyjwt = "1.7.1"
+requests = {extras = ["socks"], version = "^2.31.0"}
+python-multipart = "^0.0.6"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,7 +1,7 @@
 
-from typing import Any, Dict
+from typing import Any, Dict, Union
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Json
 import peewee
 
 import korea_apartment_price
@@ -23,9 +23,11 @@ class SimpleFavEntry(BaseModel):
   name: str
   size: int
 
-@router.get('/', response_model=BaseResponse[Any])
+@router.get('/', response_model=BaseResponse[dict[str, Any]])
 def fav_list(u: models.User = Depends(get_current_real_user)):
   fav = models.Favorite.list(u)
+  print(fav)
+  print(fav.__class__)
   return BaseResponse(success=True, result=fav)
 
 class FavoriteAddReq(BaseModel):

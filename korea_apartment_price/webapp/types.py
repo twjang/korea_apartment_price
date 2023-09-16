@@ -1,12 +1,12 @@
 from typing_extensions import TypedDict
 from typing import Generic, Optional, TypeVar
 
-from pydantic.generics import GenericModel
+from pydantic import BaseModel
 
 
 T = TypeVar('T')
 
-class BaseResponse(GenericModel, Generic[T]):
+class BaseResponse(BaseModel, Generic[T]):
   success: bool
-  msg: Optional[str]
-  result: Optional[T]
+  msg: Optional[str] = None
+  result: Optional[T] = None
