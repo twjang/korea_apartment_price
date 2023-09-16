@@ -1,6 +1,7 @@
 {
   "TRADES_API_KEY": "[API KEY HERE]",
   "RENTS_API_KEY": "[API KEY HERE]",
+  "BLD_LEDGER_API_KEY": "[API KEY HERE]",
   "KOSIS_API_KEY": "[API KEY HERE]",
   "MONGO_URI": "mongodb://localhost/korea_apartment_price",
   "WEBAPP": {

@@ -362,6 +362,85 @@ const ParamEditDialog: React.FC<ParamEditDialogProp> = (prop: ParamEditDialogPro
   );
 } 
 
+interface GraphConfigGroupProp {
+  title: string;
+  volumeParams: VolumeParams;
+  onVolumeParamsChanged?: (p:VolumeParams)=>unknown;
+  selectedAddresses: RegionCode[];
+  onSelectedAddressesChanged?: (p:RegionCode[])=>unknown;
+}
+
+const GraphConfigGroup: React.FC = ({
+  title,
+  volumeParams,
+  selectedAddresses,
+  onVolumeParamsChanged,
+  onSelectedAddressesChanged,
+}: GraphConfigGroupProp) => {
+  const [isParamEditDialogOpen, setParamEditDialogOpen] = React.useState<boolean>(false);
+  const [isSearchAddressCodeDialogOpen, setSearchAddressCodeDialogOpen] = React.useState<boolean>(false);
+  
+  const handleSearchAddressCodeDialogOpen = () => {  setSearchAddressCodeDialogOpen(true); };
+  const handleSearchAddressCodeDialogClose = () => { setSearchAddressCodeDialogOpen(false); };
+
+  const handleParamEditDialogOpen = () => {
+    setParamEditDialogOpen(true);
+  };
+
+  const handleParamEditDialogClose = () => {
+    setParamEditDialogOpen(false);
+  };
+
+  return (<MUI.Paper style={{ flexGrow: 0, flexShrink: 0 }}>
+        <div style={{ padding: '1em' }}>
+          {(volumeParams?.sizeFrom || volumeParams?.sizeTo)?
+          <div style={{ display:'flex', flexDirection:'row' }}>
+            <MUI.Typography fontStyle={{ fontWeight: 'bold'}} style={{ width: '10em'}}>전용 면적</MUI.Typography>
+            <MUI.Typography style={{ marginLeft: '1em' }}>
+            {(volumeParams?.sizeFrom)? `${volumeParams.sizeFrom} 평`: ``} ~ 
+            {(volumeParams?.sizeTo)? `${volumeParams.sizeTo} 평`: ``}
+            </MUI.Typography>
+          </div>: <></>} 
+
+          {(volumeParams?.priceFrom || volumeParams?.priceTo)?
+          <div style={{ display:'flex', flexDirection:'row' }}>
+            <MUI.Typography fontStyle={{ fontWeight: 'bold'}} style={{ width: '10em'}}>가격</MUI.Typography>
+            <MUI.Typography style={{ marginLeft: '1em' }}>
+            {(volumeParams?.priceFrom)? `${volumeParams.priceFrom} 억`: ``} ~ 
+            {(volumeParams?.priceTo)? `${volumeParams.priceTo} 억`: ``}
+            </MUI.Typography>
+          </div>: <></>} 
+
+          {(volumeParams?.dateFrom || volumeParams?.dateTo )?
+          <div style={{ display:'flex', flexDirection:'row' }}>
+            <MUI.Typography fontStyle={{ fontWeight: 'bold'}} style={{ width: '10em'}}>날짜 범위</MUI.Typography>
+            <MUI.Typography style={{ marginLeft: '1em' }}>
+            {(volumeParams?.dateFrom)? `${volumeParams.dateFrom}`: ``} ~ 
+            {(volumeParams?.dateTo)? `${volumeParams.dateTo}`: ``}
+            </MUI.Typography>
+          </div>: <></>} 
+
+          <div style={{ display:'flex', flexDirection:'row' }}>
+            <MUI.Typography fontStyle={{ fontWeight: 'bold'}} style={{ width: '10em', flexShrink: 0, flexGrow: 0}}>지역</MUI.Typography>
+            <MUI.Typography style={{ marginLeft: '1em', flexShrink: 1, flexGrow: 1, textAlign: 'left'}}>
+              {(selectedAddresses.length > 0)? selectedAddresses.map(e=>{ return e.address }).join(', '): '지역을 선택해주세요'}
+            </MUI.Typography>
+          </div>
+
+        </div>
+        <MUI.Divider />
+        <div style={{ padding: '1em', display: 'flex', flexDirection: 'row', justifyContent: 'space-between' }}>
+          <div>
+            <MUI.Button variant="outlined" onClick={()=>{handleSearchAddressCodeDialogOpen(); }}>지역 변경</MUI.Button>
+            <MUI.Button variant="outlined" onClick={()=>{handleParamEditDialogOpen();}} style={{ marginLeft: '0.5em'}}>범위 변경</MUI.Button>
+          </div>
+          <div>
+            <MUI.Button variant="contained" onClick={()=>{ showGraph(); }} disabled={!showButtonEnabled}>조회</MUI.Button>
+          </div>
+        </div>
+      </MUI.Paper>)
+}
+
 const Page: React.FC = () => {
   const [isParamEditDialogOpen, setParamEditDialogOpen] = React.useState<boolean>(false);
   const [isSearchAddressCodeDialogOpen, setSearchAddressCodeDialogOpen] = React.useState<boolean>(false);

@@ -25,10 +25,13 @@ mongodb가 액세스 가능해야 합니다.
 * 일단 개발계정 활용 신청을 합니다. 연구 목적으로 적당히 기입하세요.
 * 운용계정 활용 신청을 해서 운용계정으로 업그레이드 합니다. 마찬가지로 적당히 내용을 채워주면 자동 승인됩니다.
 * 마찬가지로 "국토교통부_아파트 전월세 자료" API의 운용계정 키를 발급 받습니다.
+* 또 "국토교통부_건축물대장정보 서비스" API의 운용계정 키를 발급 받습니다.
 
 ### data/config.json 편집
 * data/config.example.json을 data/config.json 에 복사해줍니다.
-* 이전 과정에서 받은 실거래 자료 API Key를 config.json의 TRADES_API_KEY 필드에 적어줍니다. 전월세 자료는 RENTS_API_KEY에 적습니다.
+* 이전 과정에서 받은 실거래 자료 API Key를 config.json의 TRADES_API_KEY 필드에 적어줍니다. URL Encoding 되지 않은 "일반 인증키 (Decoding)" 의 값을 사용하세요. 
+* 전월세 자료는 RENTS_API_KEY에 적습니다. 
+* 건축물대장 정보 API KEY는 BLD_LEDGER_API_KEY에 적습니다.
 * mongodb connection uri를 "MONGO_URI" 필드에 적어줍니다. 
 
 ### scripts/{orderbook, trades, rents}_region_code.csv 편집
@@ -65,6 +68,11 @@ mongodb가 액세스 가능해야 합니다.
 ### KB 부동산 호가 목록 다운로드
 * ./scripts/fetch_kb_orderbook.py를 실행시켜서 다운로드 받으세요.
 * KB 부동산에 올라와있는 아파트 매물 호가들의 목록을 받아서 mongodb 에 넣어줍니다.
+
+### 건축물대장 정보 다운로드
+* ./scripts/get_building_ledger.py 를 실행시켜서 다운로드 받으세요.
+* KB 부동산 아파트 목록에 해당하는 아파트들에 대한 대지 면적등의 정보를 받아서 mongodb에 넣어줍니다.
+
 
 ## API 서버
 
