@@ -74,7 +74,7 @@ class TradeDownloader:
       params = {
           'LAWD_CD': region_code,
           'DEAL_YMD': ymd,
-          'serviceKey': self.api_key,
+          'ServiceKey': self.api_key,
           'numOfRows': num_rows,
           'pageNo': cur_page,
       }

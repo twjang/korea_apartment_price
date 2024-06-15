@@ -18,7 +18,7 @@ import pandas as pd
 
 from korea_apartment_price.path import SCRIPT_ROOT
 from korea_apartment_price import db
-from korea_apartment_price.kb_liiv import KBLiivCrawler
+from korea_apartment_price.kb_liiv import KBLiivCrawler, KBLiivCrawlerWithProxy
 from korea_apartment_price.utils import keyconvert
 from korea_apartment_price.utils.throttle import Throttler
 
@@ -34,8 +34,7 @@ def parse_args():
 args = parse_args()
 region_codes = pd.read_csv(args.region_code_list_csv)
 apt_idnames = set()
-proxy_list = [None]
-cur_proxy_idx = 0
+proxy_list = []
 
 print ('[*] reading proxy list')
 with open(args.proxy_list, 'r') as f:
@@ -68,33 +67,8 @@ if args.remove_todays_orderbook:
 
 print ('[*] downloading orderbooks')
 
-def use_proxy(proxy_addr: Optional[str])->KBLiivCrawler:
-  if proxy_addr is not None:
-    print(f'[!] trying proxy: {proxy_addr}')
-    crawler = KBLiivCrawler(reqeuests_args={
-      "proxies": {
-        "https": proxy_addr,
-        "http": proxy_addr
-      },
-      "verify": False
-    })
-  else:
-    print(f'[!] trying direct connection(no proxy)')
-    crawler = KBLiivCrawler(reqeuests_args={
-      "verify": False
-    })
-  return crawler
 
-
-def get_crawler_with_new_proxy()->KBLiivCrawler:
-  global proxy_list, cur_proxy_idx
-  proxy = proxy_list[cur_proxy_idx]
-  cur_proxy_idx = (cur_proxy_idx + 1) % len(proxy_list)
-  return use_proxy(proxy)
-
-
-
-crawler = get_crawler_with_new_proxy()
+crawler = KBLiivCrawlerWithProxy(proxy_list=proxy_list)
 throttler = Throttler(0.6)
 
 for idx, (apt_id, apt_name) in enumerate(apt_idnames):
@@ -109,18 +83,11 @@ for idx, (apt_id, apt_name) in enumerate(apt_idnames):
     try:
       throttler.throttle()
       data = crawler.cleansed_orderbook(apt_id, trade_types=[db.TradeType.WHOLE])
-    except KeyboardInterrupt as e:
-      print('Ctrl+C detected. just retrying..')
-      time.sleep(1.0)
     except Exception as e:
       print(f'Exception: {e}')
       print(traceback.format_exc())
       print(f'failed to retrieve apt_name={apt_name} apt_id={apt_id}. retrying..')
       time.sleep(1.0)
-      fail_cnt += 1
-      if fail_cnt >= 2: 
-        crawler = get_crawler_with_new_proxy()
-        fail_cnt = 0
 
     if data is not None and len(data) == 0:
       retry_cnt += 1

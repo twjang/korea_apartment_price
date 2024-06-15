@@ -13,7 +13,7 @@ import pickle
 import requests
 from tqdm import tqdm
 from korea_apartment_price.db import RowKBApart, RowKBApartType
-from korea_apartment_price.kb_liiv import KBDo, KBLiivCrawler
+from korea_apartment_price.kb_liiv import KBDo, KBLiivCrawlerWithProxy
 from korea_apartment_price.utils.converter import keyfilt, safe_float, safe_int
 from korea_apartment_price.path import *
 from korea_apartment_price import db
@@ -23,13 +23,25 @@ def parse_args():
   parser.add_argument('--skip_downloaded', action='store_false', help='skip already downloaded apartments')
   parser.add_argument('--truncate_db', action='store_true', help='drop collection before downloading')
   parser.add_argument('--disable_cache', action='store_true', help='do not load previously downloaded gu list')
+  parser.add_argument('-p,--proxy', dest='proxy_list', help='proxy list file', default=os.path.join(ROOT, 'scripts/proxy_lst.txt'), required=False)
   return parser.parse_args()
 
 args = parse_args()
 gu_lst = None
 apt_lst = None
 is_updated = True
-crawler = KBLiivCrawler()
+proxy_list = []
+cur_proxy_idx = 0
+
+print ('[*] reading proxy list')
+with open(args.proxy_list, 'r') as f:
+  for line in f.readlines():
+    line = line.strip()
+    if len(line) == 0: continue
+    if line.startswith('#'): continue
+    proxy_list.append(line)
+
+crawler = KBLiivCrawlerWithProxy(proxy_list=proxy_list)
 
 path_cache = os.path.join(CACHE_ROOT, 'kb_apt_summary.pkl')
 if os.path.exists(path_cache) and not args.disable_cache:
@@ -93,6 +105,8 @@ for apt_ent in prog_bar:
   apt_id = safe_int(apt_ent['단지기본일련번호'])
   if apt_col.count_documents({'_id': apt_id}) > 0 and args.skip_downloaded:
     continue
+  if apt_ent.get('매물종별구분', '').startswith('C'):
+    continue # 분양 매물
   
   apt_info = None
   apt_types = None

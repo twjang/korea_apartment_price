@@ -1,8 +1,12 @@
 import datetime
+import random
+import time
+import traceback
 import requests
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, TypeVar
 from enum import Enum
 from korea_apartment_price.db import RowKBOrderbook, TradeType
+from korea_apartment_price.utils.throttle import Throttler
 
 from korea_apartment_price.utils.converter import keyfilt, safe_float, safe_int
 
@@ -51,6 +55,11 @@ def _convert_trade_type(d: str)->Optional[TradeType]:
 
 class KBLiivCrawler:
   def __init__(self, timeout:float=60.0, reqeuests_args:Optional[Dict[str, any]]=None):
+    datestr = datetime.date.today().strftime('%Y%m%d')
+    randid = random.randint(1000, 9999)
+    traceid = f'user_{datestr}{randid}'
+    print(traceid)
+
     self.url = 'https://api.kbland.kr'
     self.timeout = timeout
     self.requests_args = reqeuests_args if reqeuests_args is not None else dict()
@@ -60,14 +69,14 @@ class KBLiivCrawler:
       'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'Content-Length': '1538',
       'Content-Type': 'application/json;charset=UTF-8',
       'DNT': '1',
       'Host': 'api.kbland.kr',
       'Origin': 'https://kbland.kr',
       'Pragma': 'no-cache',
+      'Traceid': traceid,
       'Referer': 'https://kbland.kr/',
-      'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36',
+      'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
       'WebService': '1',
     }
 
@@ -95,9 +104,11 @@ class KBLiivCrawler:
   def apt_info(self, apt_id: int, apt_type: str):
     url = f'{self.url}/land-complex/complex/main'
     params = {'단지기본일련번호': apt_id, '매물종별구분': apt_type}
+    print(params)
     resp = requests.get(url, params=params, timeout=self.timeout, **self.requests_args)
     data = resp.json()
-    return data.get('dataBody', {}).get('data', list())
+    print(data)
+    return data.get('dataBody', {}).get('data', {})
 
   def apt_type_info(self, apt_id: int):
     url = f'{self.url}/land-complex/complex/typInfo'
@@ -200,3 +211,107 @@ class KBLiivCrawler:
 
     data.sort(key=lambda e:(e['size'], e['price']))
     return data
+
+T = TypeVar('T')
+
+class KBLiivCrawlerWithProxy:
+  def __init__(self, 
+               timeout:float=60.0, 
+               reqeuests_args:Optional[Dict[str, any]]=None, 
+               proxy_list: list[str]=[],
+               max_retry_cnt: int = 10,
+               ):
+    self.requests_args = reqeuests_args.copy() if reqeuests_args is not None else dict()
+    self.proxy_list = [None] + proxy_list.copy()
+    self.timeout = timeout
+    self.active_proxy_index: int = 0
+    self._crawler: Optional[KBLiivCrawler] = None
+    self.max_retry_cnt = max_retry_cnt
+    self._proxy_fail_cnt = 0
+
+  
+  def _get_crawler(self, with_new_proxy=False)->KBLiivCrawler:
+    if self._crawler is None or with_new_proxy:
+      if with_new_proxy:
+        self.active_proxy_index += 1
+      proxy_addr = self.proxy_list[self.active_proxy_index % len(self.proxy_list)]
+      if proxy_addr is not None:
+        print(f'[!] trying proxy: {proxy_addr}')
+      else:
+        print(f'[!] trying direct connection (no proxy)')
+
+      new_request_args = self.requests_args.copy()
+      if proxy_addr is not None:
+        new_request_args.update ({
+          "proxies": {
+            "https": proxy_addr,
+            "http": proxy_addr
+          },
+          "verify": False
+        })
+      self._crawler = KBLiivCrawler(timeout=self.timeout, reqeuests_args=new_request_args)
+    return self._crawler
+ 
+  
+  def _retry(self, func: Callable[[KBLiivCrawler], T])->Optional[T]:
+    retry_cnt = 0
+    while retry_cnt < self.max_retry_cnt:
+      try:
+        with_new_proxy = False
+        if self._proxy_fail_cnt >= 2: 
+          with_new_proxy = True
+          self._proxy_fail_cnt = 0
+
+        res = func(self._get_crawler(with_new_proxy=with_new_proxy))
+        return res 
+      except KeyboardInterrupt:
+        print('Ctrl+C encountered.. trying another proxy')
+        self._proxy_fail_cnt += 2
+        time.sleep(1.0)
+      except requests.exceptions.ProxyError as e:
+        print(traceback.format_exc())
+        print('Encountered proxy error.. retrying')
+        self._proxy_fail_cnt += 2
+        time.sleep(1.0)
+      except requests.exceptions.RequestException as e:
+        print(traceback.format_exc())
+        print(f'requests exception encountered.. retrying')
+        self._proxy_fail_cnt += 1
+        retry_cnt += 1
+        time.sleep(1.0)
+  
+  def list_city(self, city: KBDo):
+    return self._retry(lambda c: c.list_city(city))
+
+  def list_gu(self, city: KBDo, gu_name: str):
+    return self._retry(lambda c: c.list_gu(city=city, gu_name=gu_name))
+
+  def list_apts(self, lawaddrcode: str):
+    return self._retry(lambda c: c.list_apts(lawaddrcode=lawaddrcode))
+
+  def apt_info(self, apt_id: int, apt_type: str):
+    return self._retry(lambda c: c.apt_info(apt_id=apt_id, apt_type=apt_type))
+
+  def apt_type_info(self, apt_id: int):
+    return self._retry(lambda c: c.apt_type_info(apt_id=apt_id))
+
+  def apt_price_info (self, apt_id: int, area_type_id: int):
+    return self._retry(lambda c: c.apt_price_info(apt_id=apt_id, area_type_id=area_type_id))
+
+  def kb_price(self, apt_id: int, area_type_id: int)->Optional[int]:
+    return self._retry(lambda c: c.kb_price(apt_id=apt_id, area_type_id=area_type_id))
+
+  def partial_orderbook(self, apt_id: int, order_by: str='date', aggregate: bool=True, items_per_page:int=10, page_idx=1):
+    return self._retry(lambda c: c.partial_orderbook(
+      apt_id=apt_id, order_by=order_by, aggregate=aggregate, items_per_page=items_per_page, page_idx=page_idx))
+
+  def orderbook(self, apt_id: int, order_by: str='date', aggregate: bool=True):
+    return self._retry(lambda c: c.orderbook(
+      apt_id=apt_id, order_by=order_by, aggregate=aggregate))
+
+  def cleansed_orderbook(self, apt_id: int, order_by: str='date', aggregate: bool=True, 
+                         trade_types: Optional[List[TradeType]]=None, sizes: Optional[List[float]]=None, 
+                         include_detail:bool=True)->List[RowKBOrderbook]:
+    return self._retry(lambda c: c.cleansed_orderbook(
+      apt_id=apt_id, order_by=order_by, aggregate=aggregate, trade_types=trade_types, 
+      sizes=sizes, include_detail=include_detail))
