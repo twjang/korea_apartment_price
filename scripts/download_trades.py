@@ -79,7 +79,9 @@ class TradeDownloader:
           'pageNo': cur_page,
       }
 
-      url = f'http://openapi.molit.go.kr/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTradeDev'
+      # url = 'http://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev' # new api url looks like unstable
+      url = 'http://openapi.molit.go.kr/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTradeDev'
+
       resp = requests.get(url, params=params, timeout=self.timeout)
       soup = BeautifulSoup(resp.content, 'lxml-xml')
       items = soup.findAll('item')
