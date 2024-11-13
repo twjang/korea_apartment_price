@@ -38,24 +38,24 @@ class RentDownloader:
     num_rows = 1000
     res = []
     keylist = [
-      ('보증금액', 'price_deposit'),
-      ('월세금액', 'price_monthly'),
-      ('건축년도', 'created_at'),
-      ('갱신요구권사용', 'rent_extended'),
-      ('법정동', 'lawaddr_dong'),
-      ('아파트', 'name'),
-      ('계약구분', 'contract_type'),
-      ('계약기간', 'contract_duration'),
-      ('임대일', 'date_serial'),
-      ('년', 'year'),
-      ('월', 'month'),
-      ('일', 'date'),
-      ('전용면적', 'size'),
-      ('종전계약보증금', 'prev_deposit'),
-      ('종전계약월세', 'prev_monthly'),
-      ('지번', 'jibun'),
-      ('지역코드', 'location_code'),
-      ('층', 'floor'),
+      ('보증금액', 'deposit', 'price_deposit'),
+      ('월세금액', 'monthlyRent', 'price_monthly'),
+      ('건축년도', 'buildYear', 'created_at'),
+      ('갱신요구권사용', 'useRRRight', 'rent_extended'),
+      ('법정동', 'umdNm', 'lawaddr_dong'),
+      ('아파트', 'aptNm', 'name'),
+      ('계약구분', 'contractType', 'contract_type'),
+      ('계약기간', 'contractTerm', 'contract_duration'),
+      ('임대일', None, 'date_serial'),
+      ('년', 'dealYear', 'year'),
+      ('월', 'dealMonth', 'month'),
+      ('일', 'dealDay', 'date'),
+      ('전용면적', 'excluUseAr', 'size'),
+      ('종전계약보증금', 'preDeposit', 'prev_deposit'),
+      ('종전계약월세', 'preMonthlyRent', 'prev_monthly'),
+      ('지번', 'jibun', 'jibun'),
+      ('지역코드', 'sggCd', 'location_code'),
+      ('층', 'floor', 'floor'),
     ]
 
     cur_page = 1
@@ -70,8 +70,7 @@ class RentDownloader:
           'pageNo': cur_page,
       }
 
-      # url = 'http://apis.data.go.kr/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent' # new api url looks like unstable
-      url = f'http://openapi.molit.go.kr:8081/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptRent'
+      url = 'http://apis.data.go.kr/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent' 
       resp = requests.get(url, params=params, timeout=self.timeout)
       soup = BeautifulSoup(resp.content, 'lxml-xml')
       items = soup.findAll('item')
@@ -84,9 +83,9 @@ class RentDownloader:
       for v in items:
         item = {}
         item_en = {}
-        for key, key_en in keylist:
-          elem = v.find(key)
-          item[key] = elem.text.strip() if elem is not None else None
+        for key_old, key_new, key_internal in keylist:
+          elem = v.find(key_new)
+          item[key_old] = elem.text.strip() if elem is not None else None
 
         item['임대일'] = safe_int(item['년'], 0) * 10000 + safe_int(item['월'], 0) * 100 + safe_int(item['일'], 0)
         for pricekey in ['보증금액', '월세금액', '종전계약보증금', '종전계약월세']:
@@ -105,10 +104,10 @@ class RentDownloader:
         ]:
           if intkey in item: item[intkey] = safe_int(item[intkey])
 
-        for key, key_en in keylist:
-          if isinstance(item[key], str):
-            item[key] = item[key].strip()
-          item_en[key_en] = item[key]
+        for key_old, key_new, key_internal in keylist:
+          if isinstance(item[key_old], str):
+            item[key_old] = item[key_old].strip()
+          item_en[key_internal] = item[key_old]
 
         res.append(item_en)
       cur_page += 1

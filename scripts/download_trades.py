@@ -38,33 +38,34 @@ class TradeDownloader:
   def get(self, ymd: int, region_code: int)->List[RowTrade]:
     num_rows = 1000
     res = []
+    # old field name, new field name, our field name
     keylist = [
-      ('일련번호', 'serial'),
-      ('거래금액', 'price'),
-      ('건축년도', 'created_at'),
-      ('도로명', 'addr_road'),
-      ('도로명건물본번호코드', 'addrcode_bld'),
-      ('도로명건물부번호코드','addrcode_bld_sub'),
-      ('도로명시군구코드', 'addrcode_city'),
-      ('도로명일련번호코드', 'addrcode_serial'),
-      ('도로명코드', 'addrcode'),
-      ('법정동', 'lawaddr_dong'),
-      ('법정동본번코드', 'lawaddrcode_main'),
-      ('법정동부번코드', 'lawaddrcode_sub'),
-      ('법정동시군구코드', 'lawaddrcode_city'),
-      ('법정동읍면동코드', 'lawaddrcode_dong'),
-      ('법정동지번코드', 'lawaddrcode_jibun'),
-      ('아파트', 'name'),
-      ('매매일', 'date_serial'),
-      ('년', 'year'),
-      ('월', 'month'),
-      ('일', 'date'),
-      ('전용면적', 'size'),
-      ('지번', 'jibun'),
-      ('지역코드', 'location_code'),
-      ('층', 'floor'),
-      ('해제여부', 'is_canceled'),
-      ('해제사유발생일', 'canceled_date'),
+      ('일련번호',  'aptSeq', 'serial'),
+      ('거래금액', 'dealAmount', 'price'),
+      ('건축년도', 'buildYear', 'created_at'),
+      ('도로명',   'roadNm', 'addr_road'),
+      ('도로명건물본번호코드', 'roadNmBonbun' ,'addrcode_bld'),
+      ('도로명건물부번호코드', 'roadNmBubun' ,'addrcode_bld_sub'),
+      ('도로명시군구코드' , 'roadNmSggCd', 'addrcode_city'),
+      ('도로명일련번호코드', 'roadNmSeq', 'addrcode_serial'),
+      ('도로명코드', 'roadNmCd', 'addrcode'),
+      ('법정동', 'umdNm', 'lawaddr_dong'),
+      ('법정동본번코드', 'bonbun', 'lawaddrcode_main'),
+      ('법정동부번코드', 'bubun', 'lawaddrcode_sub'),
+      ('법정동시군구코드', 'sggCd', 'lawaddrcode_city'),
+      ('법정동읍면동코드', 'umdCd', 'lawaddrcode_dong'),
+      ('법정동지번코드', 'landCd', 'lawaddrcode_jibun'),
+      ('아파트', 'aptNm', 'name'),
+      ('매매일', None, 'date_serial'),
+      ('년', 'dealYear', 'year'),
+      ('월', 'dealMonth', 'month'),
+      ('일', 'dealDay', 'date'),
+      ('전용면적', 'excluUseAr', 'size'),
+      ('지번', 'jibun', 'jibun'),
+      ('지역코드', 'sggCd', 'location_code'),
+      ('층', 'floor', 'floor'),
+      ('해제여부', 'cdealType', 'is_canceled'),
+      ('해제사유발생일', 'cdealDay',  'canceled_date'),
     ]
 
     cur_page = 1
@@ -79,8 +80,7 @@ class TradeDownloader:
           'pageNo': cur_page,
       }
 
-      # url = 'http://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev' # new api url looks like unstable
-      url = 'http://openapi.molit.go.kr/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTradeDev'
+      url = 'http://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev' 
 
       resp = requests.get(url, params=params, timeout=self.timeout)
       soup = BeautifulSoup(resp.content, 'lxml-xml')
@@ -94,9 +94,11 @@ class TradeDownloader:
       for v in items:
         item = {}
         item_en = {}
-        for key, key_en in keylist:
-          elem = v.find(key)
-          item[key] = elem.text.strip() if elem is not None else None
+        for key_old, key_new, key_internal in keylist:
+          if key_new is None:
+            continue
+          elem = v.find(key_new)
+          item[key_old] = elem.text.strip() if elem is not None else None
 
         item['매매일'] = safe_int(item['년'], 0) * 10000 + safe_int(item['월'], 0) * 100 + safe_int(item['일'], 0)
         item['거래금액'] = safe_int(item['거래금액'].replace(',', ''))
@@ -125,10 +127,10 @@ class TradeDownloader:
         ]:
           if intkey in item: item[intkey] = safe_int(item[intkey])
 
-        for key, key_en in keylist:
-          if isinstance(item[key], str):
-            item[key] = item[key].strip()
-          item_en[key_en] = item[key]
+        for key_old, key_new, key_internal in keylist:
+          if isinstance(item[key_old], str):
+            item[key_old] = item[key_old].strip()
+          item_en[key_internal] = item[key_old]
 
         res.append(item_en)
       cur_page += 1
